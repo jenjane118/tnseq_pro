@@ -1,0 +1,3 @@
+samples: [test_5000_R1]
+
+genomeFile: ref_seqs/Mbovis_AF2122-97.fasta
