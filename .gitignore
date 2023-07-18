@@ -53,6 +53,7 @@ vignettes/*.pdf
 # directories and file formats that contain large data files
 *.bed
 *.bam
+*.bam.bai
 *.sam
 fastp/
 fastqc/
