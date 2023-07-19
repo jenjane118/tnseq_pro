@@ -79,6 +79,8 @@ def analyze_dataset(wigfile):
 
 #############################################################################
 
+## this converts .fastq to .fasta files (header/seq only)
+
 def fastq2reads(infile,outfile,maxreads):
   output = open(outfile,"w")
   cnt,tot = 0,0
@@ -504,13 +506,14 @@ def template_counts(ref,sam,bcfile,vars):
       if bc=="XXXXXXXXXX": continue
       if code[6]=="1" and code[1]=="1": # both reads map properly (83 or 99) and has legit barcode
         vars.mapped += 1
-        readlen = len(w[9])
-        pos,size = int(w[3]),int(w[8]) # note: size could be negative
+        readlen = len(w[9]) #length of sequence (this is trimmed of tranposon already?)
+        pos,size = int(w[3]),int(w[8]) # note: size could be negative  (this is left-most position and PNEXT)
         strand,delta = 'F',-2
         if code[4]=="1": strand,delta = 'R',readlen
 
         pos += delta
         replicon_name = w[2]
+        # set up dictionary of hits at positions found in reads (position, strand, size of alignment, barcode)
         if pos not in hits[replicon_name]: hits[replicon_name][pos] = []
         hits[replicon_name][pos].append((strand,size,bc))
 
@@ -519,14 +522,16 @@ def template_counts(ref,sam,bcfile,vars):
     sites = []
     genome = read_genome(ref, replicon_index)
     for i in range(len(genome)-1):
-      #if genome[i:i+2].upper()=="TA":
+      #if genome[i:i+2].upper()=="TA": 
+      ## looking for each TA site as go through reference genome
       if vars.transposon=="Himar1" and genome[i:i+2].upper()!="TA": continue 
-      else:
-        pos = i+1
-        h = hits[replicon_names[replicon_index]].get(pos,[])
+      else:  #if find a TA site in genome file
+        pos = i+1 #correcting for zero-based indexing
+        h = hits[replicon_names[replicon_index]].get(pos,[])  #for each TA site, search hits dict for hits positions
+        # sort these hits into lists of F,R reads and number of raw reads vs template hits
         f = list(filter(lambda x: x[0]=='F',h))
         r = list(filter(lambda x: x[0]=='R',h))
-        u = list(set(h))
+        u = list(set(h))  #set of unique hits
         uf = list(filter(lambda x: x[0]=='F',u))
         ur = list(filter(lambda x: x[0]=='R',u))
         data = [pos,len(f),len(uf),len(r),len(ur),len(f)+len(r),len(uf)+len(ur)]
@@ -579,7 +584,7 @@ def read_counts(ref,sam,vars):
                 pos = int(w[3])
                 replicon_name = w[2]
 
-                if vars.protocol.lower() == "mme1":
+                if vars.protocol.lower() == "mme1": #not relevant for our protocol
                     strand,delta = 'F',readlen
                     if code[4]=="1": strand,delta = 'R',1
                     site1 = pos + delta - 2 #if on + strand, take column 3 position and add 1bp,
@@ -589,15 +594,18 @@ def read_counts(ref,sam,vars):
                     if site2 in sites_dict[replicon_name]:
                         increase_counts(site2, sites_dict[replicon_name], strand)
                 else:
-                    strand,delta = 'F',-2
-                    if code[4]=="1": strand,delta = 'R',readlen
+                    ## corrections to get F/R strand positions to align to corresponding TA sites from list
+                    strand,delta = 'F',-2 # if on fwd strand, subtract 2 from start pos
+                    if code[4]=="1": strand,delta = 'R',readlen   #if on reverse strand, will add read len to start
                     site1 = pos + delta #if on + strand, take column 3 position and add 1bp)
+                    # if corrected site present in list of TA sites for genome, increase counts
                     if site1 in sites_dict[replicon_name]:
                         increase_counts(site1, sites_dict[replicon_name], strand)
 
     results_list = []
     for replicon_index in range(vars.num_replicons):
         results = []
+        # all dicts are already sorted? but this iterates thru dictionary and makes list to return
         for key in sorted(sites_dict[replicon_names[replicon_index]].keys()):
             results.append(sites_dict[replicon_names[replicon_index]][key])
         results_list.append(results)
