@@ -331,6 +331,30 @@ def write_wig_from_dict(wig_dict, sample_name, genome):
 
 #**********************************************************************************
 
+def assign_counts_to_sites(ta_sites, barcode_position_list):
+    """
+    Function to tally ta sites with insertions
+    """
+
+    insertions_list = [line[0] for line in barcode_position_list]
+    read_count_dict = {}
+    no_match        = []
+
+    for site in insertions_list:
+        #check if ins_site is in list of ta sites (or within 1 nt of ta position)
+        closest_ta = take_closest(ta_sites, site)
+        if abs(closest_ta - site) < 2:
+            if closest_ta not in read_count_dict:
+                read_count_dict[closest_ta] = 1
+            else:
+                read_count_dict[closest_ta] += 1
+        else:
+            no_match.append(site)
+
+    return read_count_dict, no_match
+
+#**********************************************************************************
+
 def sam_to_wig(samfile, genome_fasta, sample_name):
     """
     Wrapper function to create wig file from sam file
