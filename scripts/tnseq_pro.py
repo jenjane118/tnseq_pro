@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright 2023
 # Jennifer J. Stiens
@@ -6,6 +6,73 @@
 # 
 # This script is part of tnseq_pro read processing software   
 # 
+
+#usage: tnseq_pro.py
+
+def add_barcode(file1, file2, outdir):
+    """
+    A function to extract the barcode from the associated p7 index read to the header of each read in the fastq file
+
+    Input               file1                       fastq file for sequence reads (R1 or R3)
+                        file2                       fastq file for i7 index reads (R2)
+                        outdir                      path to output directory
+    Output              barcoded<sample>.fastq      new fastq file which has barcode added to header   
+
+    """
+    import re
+    import os.path
+
+    # identify sample name
+    filename = str(file1)
+    bn_sample = os.path.basename(file1)
+    sample = re.sub(".fastq", "", bn_sample)
+    seq_list = []
+    with open (file1, 'r') as f1, open(file2, 'r') as f2:
+    # header and sequence for R1 reads
+        for index, (line1, line2) in enumerate(zip(f1, f2)):
+            if index % 4 == 0:
+                f1_head = line1.rstrip()
+                f2_head = line2.rstrip()
+            # second line and every 4  (sequence)  
+            if index %4 == 1:
+                f1_seq = line1.rstrip()
+                #create header and barcode for index reads
+                #>A01968:63:H77VYDSX5:4:1101:25455:1423 1:N:0:AACGTGAT BC:GGGGGGGG
+                f2_barcode = line2.rstrip()
+                # add barcode to end of header in read1 file
+                new_head = f1_head + "_BC:" + f2_barcode
+                #replace whitespace
+                new_head = new_head.replace(" ", "_")
+                list_entry = new_head + "\n" + f1_seq + "\n"
+                seq_list.append(list_entry)
+    # write new file with barcodes
+    new_filename = outdir + "barcode_" + sample + ".fastq"
+    with open(new_filename, 'w') as outfile:
+        outfile.writelines(seq_list)
+    outfile.close()
+    return new_filename
+
+#********************************************************************************************************
+
+def iterate_add_barcode(fastq_dir, output_dir):
+    """
+    Function to iterate through fastq files and add barcode to header.
+    Input               fastq_dir           path to directory with fastq files
+                        output_dir          path to output directory
+    Output                  
+    """
+    import os
+    import glob
+    trimmed_files = glob.glob(fastq_dir + "/*.fastq")
+    for read1_file in trimmed_files:
+        sample_name = os.path.basename(read1_file)
+        read2_name = sample_name.replace("_R1_001.fastq", "_R2_001.fastq")
+        read2_file = read2_name.replace("trimmed_", "fastq/")
+        #add barcode to header
+        new_name = add_barcode(read1_file, read2_file, output_dir)
+        return new_name
+
+#********************************************************************************************************
 
 def read_samfile(samfile):
     """
@@ -317,7 +384,7 @@ def write_wig_from_dict(wig_dict, sample_name, genome):
     Function to write wig file from dict of insertions
     Input               wig_dict            dict of insertions
                         outfile_name        str of outfile name
-    Output              outfile             wig file of insertions
+    Output              outfile             wig file of insertions into output dir
     """
    
     #write template reads

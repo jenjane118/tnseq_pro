@@ -5,6 +5,7 @@ scripts/tpp_tools.py
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 *.webarchive
+*/__pycache__
 
 # History files
 .Rapp.history

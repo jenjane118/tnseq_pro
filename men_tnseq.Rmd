@@ -16,7 +16,7 @@ library(tidyverse)
 
 ```
 Jupyter notebook for all transit work on thoth
-/d/in16/u/sj003/men_tnseq/scripts
+/d/in16/u/sj003/men_tnseq/
 
 
 ```{bash}
