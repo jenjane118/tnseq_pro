@@ -108,6 +108,20 @@ def parse_samflag(read):
 
 #********************************************************************************************************
 
+def parse_cigar(cigar):
+    """
+    Parse cigar string from sam file
+    regex: \*|([0-9]+[MIDNSHPX=])+
+    Input               cigar               cigar string from sam file
+    Output              cig_list            list of cigar string elements
+    """
+    import re
+    #find all number/letter combos in cigar string
+    cig_list = re.findall(r'[0-9]+[MIDNSHPX=]+', cigar)
+    return cig_list
+
+#********************************************************************************************************
+
 def mmfind1(G,n,H,m,max): # lengths; assume n>m
   """
   A function to find matches of transposon sequence in read 
@@ -266,7 +280,6 @@ def find_insertion_sites(seq):
 
 #**********************************************************************************
 
-
 def open_fasta(refseq):
     with open(refseq, 'r') as file:
         seq = ''
@@ -299,7 +312,7 @@ def find_ta_position(read, tag_pos):
 
 #**********************************************************************************
 
-def find_tags2(read, target_tag, max):
+def find_tags3(read, target_tag, max):
     """
     Find transposon tag in sequence of each read.
 
@@ -310,11 +323,12 @@ def find_tags2(read, target_tag, max):
                                         from left-most start position of tag or -1 if no match
     """
     from Bio.Seq import Seq
-    #find rec of tag
+    #find rc of tag
     tag_seq = Seq(target_tag)
     rc_tag  = str(tag_seq.reverse_complement())
     # find strand of read
     strand = parse_samflag(read)
+    
     seq = read.split()[9]
     if strand == "F":
         #search string for transposon seq with max num mismatches
@@ -323,12 +337,17 @@ def find_tags2(read, target_tag, max):
             start = match + len(target_tag) #this gives start position of read (start of ta site)
         else:
             start = match
-    else: #strand is reverse
-        match = mmfind1(seq, len(seq), rc_tag, len(rc_tag), max)
-        if match != -1:
-            start = match  #to get to start of 'TA' in reverse read
-        else: 
-            start = match
+    else: ##strand is reverse start searching sequence from other end 
+        #search reverse sequence (3' to 5') for rc of tag (starting with TAAC--) start position of tag is end of tag and start of insert/ta site
+        #in some cases, soft-clipped bases at 3' end of read will make tag too long
+        cig = read.split()[5]
+        cig_list = parse_cigar(cig)
+        if cig_list[0][-1]=="S": #if there is soft-clipping at 3' end of reverse read
+            sc_correction = int(cig_list[0][:-1]) #number of soft-clipped bases
+            match = mmfind1(seq[sc_correction:len(seq)], len(seq), rc_tag, len(rc_tag), max)
+        else:
+            match = mmfind1(seq, len(seq), rc_tag, len(rc_tag), max)
+        start = match
     
     return start
 
