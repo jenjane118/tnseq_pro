@@ -628,7 +628,7 @@ def sam_to_wig(samfile, genome_fasta, sample_name):
     #get genome name from fasta file
     genome      = os.path.basename(fasta).split(".")[0]
     fasta_seq   = open_fasta(genome_fasta)
-    ta_sites    = find_insertion_sites(fasta_seq)
+    ta_sites    = find_insertion_sites(fasta_seq)[0]
     # make list of the positions of every insertion from unique templates
     template_positions = filter_mapped_reads_tag3(samfile, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2)
     #count number of reads per ta site
