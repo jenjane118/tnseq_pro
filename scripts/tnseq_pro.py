@@ -158,90 +158,6 @@ def check_seq(str):
     else:
         return False
 
-
-#*****************************************************************************************
-
-def filter_mapped_reads3(sam_file, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2):
-  """ 
-  Revised filtering function: filters reads for presence of transposon tag and for duplicate barcode/ta-position
-
-  Input             sam_file                            .sam file of mapped reads
-                    tag                                 str of transposon tag used, default is Himar1
-                    mismatch_max                        integer of maximum mismatches allowed in search for tag
-  Output            template barcodes                   list of 3 values: barcode, strand, insert start
-                                                        files for template reads, duplicate reads and reads with no transposon tag found
-  """
-  import sys
-  import os
-  from operator import itemgetter
-
-  #check tag has valid nucleotides
-  if check_seq(tag):
-     pass
-  else:
-     sys.exit("Invalid sequence tag")
-
-  #read sam_file and sort lines between header and reads
-  data    = read_samfile(sam_file)
-  header  = data[0]
-  reads   = data[1]
-
-
-  barcode_list    = []
-  template_reads  = []
-  template_barcodes = []
-  notags_reads    = []
-  dup_reads       = []
-  
-  for read in reads:
-    tag_pos   = find_tags2(read, tag, mismatch_max)
-    strand    = parse_samflag(read)
-    
-    if tag_pos != -1:  #there is match for tranposon tag
-        insertion_coord = find_ta_position(read, tag_pos)
-        #find barcode
-        read_name  = read.split()[0]
-        barcode    = read_name.split("BC:",1)[1]
-        pos_barcode = [insertion_coord, strand, barcode]
-        #add to list of all reads with insertions
-        barcode_list.append(pos_barcode) 
-        barcode_list.sort(key=itemgetter(0))  #maybe this will speed up search ordering by position--but sorting will add time
-        # if hasn't been added before, add read to unique template reads
-        if barcode_list.count(pos_barcode) < 2:
-          template_reads.append(read)
-          template_barcodes.append(pos_barcode)
-        else:
-          dup_reads.append(read)
-    else:
-      notags_reads.append(read)
-  
-  print("Total number of mapped reads: ", len(reads))
-  print("number of unique templates (with tag): ", len(template_reads))
-  print("number of bad reads (with no tag): ", len(notags_reads))
-  print("Number of reads with duplicate barcode/starts: ", len(dup_reads))
-  bn = os.path.basename(sam_file)
-  #write template reads
-  outfile = "tag_filtered_templates_" + bn
-  with open(outfile, 'w') as f:
-    for line in header:
-      f.write(f"{line}\n")
-    for line in template_reads:
-      f.write(f"{line}\n")
-  outfile_dups = "duplicate_reads_" + bn
-  with open(outfile_dups, 'w') as f:
-    for line in header:
-      f.write(f"{line}\n")
-    for line in dup_reads:
-      f.write(f"{line}\n")
-  outfile_notag = "notag_filtered_mapped_" + bn
-  with open(outfile_notag, 'w') as f:
-    for line in header:
-      f.write(f"{line}\n")
-    for line in notags_reads:
-      f.write(f"{line}\n")
-
-  return template_barcodes
-
 #**********************************************************************************
 
 def motif_finder(seq, motif):
@@ -276,7 +192,7 @@ def find_insertion_sites(seq):
     fwd_positions = motif_finder(seq, "TA")
     rev_positions = motif_finder(rec_seq, "TA")
     
-    return fwd_positions, rev_positions
+    return fwd_positions
 
 #**********************************************************************************
 
@@ -494,7 +410,6 @@ def filter_mapped_reads_tag3(sam_file, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
   
     print("Total number of mapped reads forward strand: ", len(fwd_strand_reads))
     print("number of forward reads with tag: ", len(barcode_list_fwd))
-    print("number of forward reads with no tag: ", notag_count)
   
     
     notag_count = 0
@@ -517,7 +432,6 @@ def filter_mapped_reads_tag3(sam_file, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
   
     print("Total number of mapped reads reverse strand: ", len(rev_strand_reads))
     print("number of forward reads with tag: ", len(barcode_list_rev))
-    print("number of forward reads with no tag: ", notag_count)
 
     #write read files (includes all fwd and reverse reads)
     bn = os.path.basename(sam_file)
@@ -530,6 +444,26 @@ def filter_mapped_reads_tag3(sam_file, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
 
     #barcode_list_all = barcode_list_fwd + barcode_list_rev
     return barcode_list_fwd, barcode_list_rev
+
+#**********************************************************************************
+
+def remove_dups(fwd_bc_list, rev_bc_list):
+    """
+    Function to remove duplicate barcodes from fwd and rev lists
+    Input               fwd_bc_list         list of fwd barcodes
+                        rev_bc_list         list of rev barcodes
+    Output              template_bc_list    list of unique barcodes from fwd and rev lists
+    
+    """
+    import numpy as np
+
+    fwd_bc_arr = np.unique(np.array(fwd_bc_list), axis=0)
+    rev_bc_arr = np.unique(np.array(rev_bc_list), axis=0)
+    fwd_bc_list = fwd_bc_arr.tolist()
+    rev_bc_list = rev_bc_arr.tolist()
+    template_bc_list = fwd_bc_list + rev_bc_list
+    
+    return template_bc_list
 
 #**********************************************************************************
 
@@ -584,7 +518,7 @@ def assign_counts_to_sites(ta_sites, barcode_position_lists):
 
     
     read_count_dict = {}
-    no_match        = []
+    #no_match        = []
 
     fwd_insertions = barcode_position_lists[0]
     insertions_list = [line[0] for line in fwd_insertions]
@@ -596,8 +530,8 @@ def assign_counts_to_sites(ta_sites, barcode_position_lists):
                 read_count_dict[closest_ta] = 1
             else:
                 read_count_dict[closest_ta] += 1
-        else:
-            no_match.append(site)
+        #else:
+            #no_match.append(site)
 
     rev_insertions = barcode_position_lists[1]
     insertions_list = [line[0] for line in rev_insertions]
@@ -608,10 +542,10 @@ def assign_counts_to_sites(ta_sites, barcode_position_lists):
                 read_count_dict[closest_ta] = 1
             else:
                 read_count_dict[closest_ta] += 1
-        else:
-            no_match.append(site)
+        #else:
+            #no_match.append(site)
 
-    return read_count_dict, no_match
+    return read_count_dict
 
 #**********************************************************************************
 
@@ -628,13 +562,15 @@ def sam_to_wig(samfile, genome_fasta, sample_name):
     #get genome name from fasta file
     genome      = os.path.basename(fasta).split(".")[0]
     fasta_seq   = open_fasta(genome_fasta)
-    ta_sites    = find_insertion_sites(fasta_seq)[0]
+    ta_sites    = find_insertion_sites(fasta_seq)
     # make list of the positions of every insertion from unique templates
-    template_positions = filter_mapped_reads_tag3(samfile, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2)
+    read_positions = filter_mapped_reads_tag3(samfile, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2)
+    #reduce read positions and barcodes to unique templates
+    template_positions = remove_dups(read_positions[0], read_positions[1])
     #count number of reads per ta site
     res=assign_counts_to_sites(ta_sites, template_positions)
     #make complete dictionary of all possible ta sites including those with no insertions
-    ta_dict = ta_sites_to_dict(ta_sites, res[0])
+    ta_dict = ta_sites_to_dict(ta_sites, res)
     #write wig file
     wig_file = write_wig_from_dict(ta_dict, sample_name, genome)
     
