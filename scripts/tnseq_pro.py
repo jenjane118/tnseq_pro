@@ -48,7 +48,7 @@ def add_barcode(file1, file2, outdir):
                 list_entry = new_head + "\n" + f1_seq + "\n"
                 seq_list.append(list_entry)
     # write new file with barcodes
-    new_filename = outdir + "barcode_" + sample + ".fastq"
+    new_filename = outdir + "/barcode_" + sample + ".fastq"
     with open(new_filename, 'w') as outfile:
         outfile.writelines(seq_list)
     outfile.close()
@@ -66,13 +66,14 @@ def iterate_add_barcode(fastq_dir, output_dir):
     import os
     import glob
     trimmed_files = glob.glob(fastq_dir + "/*_R1_001.fastq")
+    print(trimmed_files)
     for read1_file in trimmed_files:
         sample_name = os.path.basename(read1_file)
-        read2_file  = read1_file.replace("R1", "R2")
-        #read2_file = read2_name.replace("trimmed_", "fastq/")
+        read2_file  = "fastq/" + sample_name.replace("R1", "R2")
+        read2_file = read2_file.replace("trimmed_", "")
         #add barcode to header
         new_name = add_barcode(read1_file, read2_file, output_dir)
-        return new_name
+        print(new_name)
 
 #********************************************************************************************************
 
@@ -250,121 +251,6 @@ def find_ta_position(read, tag_pos):
 
 #**********************************************************************************
 
-def find_tags_fwd2(read, target_tag, max):
-    """
-    Find transposon tag in sequence of each forward read. Needs to be within first 20 nt of read (start between 5-10)
-
-      Input           read              mapped read to forward strand (+)
-                      target_tag        string that matches transposon sequence
-                      max               maximum number of mismatches allowed (default=2)
-      Output          start             calculation of start of read/insertion point 
-                                        from left-most start position of tag or -1 if no match
-    """
-    
-    seq = read.split()[9]
-    # for forward strand, search space restricted to first 20 nt of read plus length of tag?
-    seq_space = seq[0:20+len(target_tag)]
-    #search string for transposon seq with max num mismatches
-    match = mmfind1(seq_space, len(seq_space), target_tag, len(target_tag), max)
-    if match != -1:
-        start = match + len(target_tag) #this gives start position of read (start of ta site)
-    else:
-        start = match
-    
-    return start
-
-#**********************************************************************************
-
-def find_tags_rev(read, target_tag, max):
-
-    from Bio.Seq import Seq
-    #find rc of tag
-    tag_seq = Seq(target_tag)
-    rc_tag  = str(tag_seq.reverse_complement())
-    seq = read.split()[9]
-    ##strand is reverse start searching sequence from other end 
-    #search reverse sequence (3' to 5') for rc of tag (starting with TAAC--) start position of tag is end of tag and start of insert/ta site
-    #in some cases, soft-clipped bases at 3' end of read will make tag too long
-    cig = read.split()[5]
-    cig_list = parse_cigar(cig)
-    if cig_list[0][-1]=="S": #if there is soft-clipping at 3' end of reverse read
-        sc_correction = int(cig_list[0][:-1]) #number of soft-clipped bases
-        match = mmfind1(seq[sc_correction:len(seq)], len(seq), rc_tag, len(rc_tag), max) #start search from start of aligned bases
-    else:
-        match = mmfind1(seq, len(seq), rc_tag, len(rc_tag), max)
-    
-    return match
-
-#**********************************************************************************
-
-def find_tags_rev2(read, target_tag, max):
-    """
-    Find transposon tag in sequence of each reverse read. Needs to be within final 40 nt of read (start in first 20 nt of 5' end)
-
-      Input           read              mapped read to reverse strand (-) but sequence read 3' to 5'
-                      target_tag        string that matches transposon sequence
-                      max               maximum number of mismatches allowed (default=2)
-      Output          start             calculation of start of read/insertion point 
-                                        from left-most start position of tag or -1 if no match
-    """
-    
-    from Bio.Seq import Seq
-    #find rc of tag
-    tag_seq = Seq(target_tag)
-    rc_tag  = str(tag_seq.reverse_complement())
-    seq = read.split()[9]
-    ##strand is reverse start searching sequence from other end 
-    #search reverse sequence (3' to 5') for rc of tag (starting with TAAC--) start position of tag is end of tag and start of insert/ta site
-    seq_space = seq[len(seq)-40:len(seq)]
-    #search string for start coordinate of transposon seq with max num mismatches
-    match = mmfind1(seq_space, len(seq_space), target_tag, len(target_tag), max)
-    
-    return match
-
-#**********************************************************************************
-
-def find_tags3(read, target_tag, max):
-    """
-    Find transposon tag in sequence of each read.
-
-      Input           read              mapped read
-                      target_tag        string that matches transposon sequence
-                      max               maximum number of mismatches allowed (default=2)
-      Output          start             calculation of start of read/insertion point 
-                                        from left-most start position of tag or -1 if no match
-    """
-    from Bio.Seq import Seq
-    #find rc of tag
-    tag_seq = Seq(target_tag)
-    rc_tag  = str(tag_seq.reverse_complement())
-    # find strand of read
-    strand = parse_samflag(read)
-    
-    seq = read.split()[9]
-    if strand == "F":
-        #search string for transposon seq with max num mismatches
-        match = mmfind1(seq, len(seq), target_tag, len(target_tag), max)
-        if match != -1:
-            start = match + len(target_tag) #this gives start position of read (start of ta site)
-        else:
-            start = match
-    else: ##strand is reverse start searching sequence from other end 
-        #search reverse sequence (3' to 5') for rc of tag (starting with TAAC--) start position of tag is end of tag and start of insert/ta site
-        #in some cases, soft-clipped bases at 3' end of read will make tag too long
-        cig = read.split()[5]
-        cig_list = parse_cigar(cig)
-        if cig_list[0][-1]=="S": #if there is soft-clipping at 3' end of reverse read
-            sc_correction = int(cig_list[0][:-1]) #number of soft-clipped bases
-            match = mmfind1(seq[sc_correction:len(seq)], len(seq), rc_tag, len(rc_tag), max)
-        else:
-            match = mmfind1(seq, len(seq), rc_tag, len(rc_tag), max)
-        start = match
-    
-    return start
-
-
-#**********************************************************************************
-
 def find_tags_fastq(seq, target_tag, max):
     
     """
@@ -409,99 +295,7 @@ def take_closest(myList, myNumber):
     
 #**********************************************************************************
 
-def filter_mapped_reads_tag3(sam_file, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2):
-    """ 
-    Revised filtering function: filters reads for presence of transposon tag and for duplicate barcode/ta-position
 
-    Input               sam_file                            .sam file of mapped reads
-                        tag                                 str of transposon tag used, default is Himar1
-                        mismatch_max                        integer of maximum mismatches allowed in search for tag
-    Output              read barcodes                       list of 3 values: insert_start, strand, barcode from reads with insertions
-                                                        
-    """
-    import sys
-    import os
-
-    #check tag has valid nucleotides
-    if check_seq(tag):
-        pass
-    else:
-        sys.exit("Invalid sequence tag")
-
-    #read sam_file and sort lines between header and reads
-    data    = read_samfile(sam_file)
-    header  = data[0]
-    reads   = data[1]
-
-    #divide reads by strand
-    fwd_strand_reads, rev_strand_reads = filter_reads_by_strand(reads)
-    
-    tagged_reads    = []
-    barcode_list_fwd    = []
-    barcode_list_rev    = []
-    #barcode_list_all    = []
-    notag_count = 0
-    counter = 0
-
-    for read in fwd_strand_reads:
-        tag_pos   = find_tags_fwd2(read, tag, mismatch_max)
-        strand    = "F"
-        counter += 1
-        if tag_pos != -1:  #there is match for tranposon tag
-            insertion_coord = find_ta_position(read, tag_pos)
-            #find barcode
-            read_name  = read.split()[0]
-            barcode    = read_name.split("BC:",1)[1]
-            pos_barcode = [insertion_coord, strand, barcode]
-            #add to list of all reads with insertions
-            barcode_list_fwd.append(pos_barcode) 
-            #append read to tagged reads
-            tagged_reads.append(read)
-        else:
-            notag_count += 1
-    if counter % 100000 == 0:
-        print("Processed ", counter, "forward reads")
-    print("Total number of mapped reads forward strand: ", len(fwd_strand_reads))
-    print("number of forward reads with tag: ", len(barcode_list_fwd))
-  
-    
-    notag_count = 0
-    counter = 0
-    for read in rev_strand_reads:
-        counter += 1
-        tag_pos   = find_tags_rev2(read, tag, mismatch_max)
-        strand    = "R"
-        if tag_pos != -1:  #there is match for tranposon tag
-            insertion_coord = find_ta_position(read, tag_pos)
-            #find barcode
-            read_name  = read.split()[0]
-            barcode    = read_name.split("BC:",1)[1]
-            pos_barcode = [insertion_coord, strand, barcode]
-            #add to list of all reads with insertions
-            barcode_list_rev.append(pos_barcode) 
-            #append read to tagged reads
-            tagged_reads.append(read)
-        else:
-            notag_count += 1
-    if counter % 100000 == 0:
-        print("Processed ", counter, "reverse reads")
-  
-    print("Total number of mapped reads reverse strand: ", len(rev_strand_reads))
-    print("number of forward reads with tag: ", len(barcode_list_rev))
-
-    #write read files (includes all fwd and reverse reads)
-    bn = os.path.basename(sam_file)
-    outfile = "tag_filtered_templates_" + bn
-    with open(outfile, 'w') as f:
-        for line in header:
-            f.write(f"{line}\n")
-        for line in tagged_reads:
-            f.write(f"{line}\n")
-
-    #barcode_list_all = barcode_list_fwd + barcode_list_rev
-    return barcode_list_fwd, barcode_list_rev
-
-#**********************************************************************************
 
 def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2):
     """
@@ -537,15 +331,29 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
                     notag_list.append(head + "\n")
                     notag_list.append(seq + "\n")
     # write new file with tagged and no-tagged reads
-    new_filename = outdir + "tag_trimmed_" + sample + ".fastq"
+    new_filename = outdir + "//tag_clipped_" + sample + ".fastq"
     with open(new_filename, 'w') as outfile:
         outfile.writelines(tagged_list)
     outfile.close()
-    bad_filename = outdir + "no_tag_" + sample + ".fastq"
+    bad_filename = outdir + "/no_tag_" + sample + ".fastq"
     with open(bad_filename, 'w') as outfile:
         outfile.writelines(notag_list)
     
     return new_filename
+
+#**********************************************************************************
+
+def iterate_tag_trim(fastq_directory):
+    """
+    Function to iterate through fastq files in directory and trim transposon tag
+    Input               fastq_directory     directory of fastq files
+    Output              
+    """
+    import glob
+    fastq_files = glob.glob(fastq_directory + "/*.fastq")
+    for file in fastq_files:
+        print("File being processed: ", file)
+        trim_tag_fastq(file, "barcoded_reads")
 
 #**********************************************************************************
 
@@ -618,8 +426,6 @@ def remove_dup_reads(sam_file):
     return unique_list_f, unique_list_r
 
 #**********************************************************************************
-
-#function to go through all possible ta sites and create .wig file of insertions
 
 def ta_sites_to_dict(ta_sites, read_count_dict):
     """ 
