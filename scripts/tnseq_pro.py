@@ -393,7 +393,6 @@ def remove_dup_reads(sam_file):
     barcode_list_f = []
     barcode_list_r = []
 
-    #read sam_file and sort lines between header and reads too big for memory
     with open(sam_file, 'r') as f:
         for line in f:
             line = line.strip()
@@ -402,15 +401,15 @@ def remove_dup_reads(sam_file):
             else:
                 start_pos = line.split()[3]
                 counter += 1
-                if counter % 100000 == 0:
+                if counter % 1000000 == 0:
                     print("Processed ", counter, "reads")
                 #find barcode and strand
                 read_name  = line.split()[0]
-                strand     = parse_samflag(line)
+                strand     = int(line.split()[1])
                 barcode    = read_name.split("BC:",1)[1]
 
                 #add to lists of starts and barcodes 
-                if strand == "F":
+                if strand == 0:
                     barcode_list_f.append([start_pos, barcode])
                 else:
                     barcode_list_r.append([start_pos, barcode])
