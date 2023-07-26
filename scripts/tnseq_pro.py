@@ -65,11 +65,11 @@ def iterate_add_barcode(fastq_dir, output_dir):
     """
     import os
     import glob
-    trimmed_files = glob.glob(fastq_dir + "/*.fastq")
+    trimmed_files = glob.glob(fastq_dir + "/*_R1_001.fastq")
     for read1_file in trimmed_files:
         sample_name = os.path.basename(read1_file)
-        read2_name = sample_name.replace("_R1_001.fastq", "_R2_001.fastq")
-        read2_file = read2_name.replace("trimmed_", "fastq/")
+        read2_file  = read1_file.replace("R1", "R2")
+        #read2_file = read2_name.replace("trimmed_", "fastq/")
         #add barcode to header
         new_name = add_barcode(read1_file, read2_file, output_dir)
         return new_name
