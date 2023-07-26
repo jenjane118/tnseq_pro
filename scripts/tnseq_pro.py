@@ -9,6 +9,8 @@
 
 #usage: tnseq_pro.py
 
+#**********************************************************************************
+
 def add_barcode(file1, file2, outdir):
     """
     A function to extract the barcode from the associated p7 index read to the header of each read in the fastq file
@@ -519,10 +521,10 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
     with open (fastq_file, 'r') as f:
     # header and sequence for R1 reads
         for index, line in enumerate(f):
-            if index % 4 == 0:
+            if index % 2 == 0:
                 head = line.rstrip()
             # second line and every 4  (sequence)  
-            if index %4 == 1:
+            if index % 2 == 1:
                 seq = line.rstrip()
                 #find transposon tag in new sequence
                 tag_start = find_tags_fastq(seq, tag, mismatch_max)
