@@ -71,6 +71,7 @@ def iterate_add_barcode(fastq_dir, output_dir):
         sample_name = os.path.basename(read1_file)
         read2_file  = "fastq/" + sample_name.replace("R1", "R2")
         read2_file = read2_file.replace("trimmed_", "")
+        read2_file = read2_file.replace(".fastq", ".fastq.gz")
         #add barcode to header
         new_name = add_barcode(read1_file, read2_file, output_dir)
         print(new_name)
@@ -391,23 +392,40 @@ def sam_to_wig(samfile, genome_fasta, sample_name):
     Output          wig file        wig file of insertions
     """
     import os
-    fasta       = genome_fasta
+
     #get genome name from fasta file
-    genome      = os.path.basename(fasta).split(".")[0]
-    fasta_seq   = open_fasta(genome_fasta)
-    ta_sites    = find_insertion_sites(fasta_seq)
-    # make list of the positions of every insertion from unique templates
-    read_positions = filter_mapped_reads_tag3(samfile, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2)
-    #reduce read positions and barcodes to unique templates
-    template_positions = remove_dups(read_positions[0], read_positions[1])
+    genome      = os.path.basename(genome_fasta).split(".")[0]  
+    
+    #remove duplicate reads
+    unique_reads = remove_dup_reads(samfile)
+    fwd_sites = unique_reads[0]
+    rev_sites = unique_reads[1]
+
     #count number of reads per ta site
-    res=assign_counts_to_sites(ta_sites, template_positions[0], template_positions[1])
-    #make complete dictionary of all possible ta sites including those with no insertions
-    ta_dict = ta_sites_to_dict(ta_sites, res)
+    res = assign_counts_to_sites(genome_fasta, fwd_sites, rev_sites)
+    
     #write wig file
-    wig_file = write_wig_from_dict(ta_dict, sample_name, genome)
+    wig_file = write_wig_from_dict(res, sample_name, genome)
     
     return wig_file
+
+#**********************************************************************************
+
+def iterate_sam_to_wig(sam_dir, genome_fasta):
+    # make list of .sam files in directory
+    import os
+    import glob
+    import re
+    sam_files = glob.glob("sorted_reads" + "/*.sam")
+    print(sam_files)
+    bovis_fasta = "ref_seqs/Mbovis_AF2122-97.fasta"
+    for file in sam_files:
+        #find sample name from file
+        sample_filename = os.path.basename(file).split(".")[0]
+        sample_name = re.findall(r'mapped_(\w*)_R1_001', sample_filename)[0]
+        print(sample_name)
+        print(file)
+        sam_to_wig(file, bovis_fasta, sample_name)
 
 #**********************************************************************************
 
