@@ -388,6 +388,7 @@ def remove_dup_reads(sam_file):
                                                         
     """
     import numpy as np
+    import re
 
     counter = 0
     barcode_list_f = []
@@ -399,25 +400,31 @@ def remove_dup_reads(sam_file):
             if line.startswith("@"):
                 pass
             else:
-                start_pos = line.split()[3]
+                left_pos = int(line.split()[3])
                 counter += 1
-                if counter % 1000000 == 0:
+                if counter % 5000000 == 0:
                     print("Processed ", counter, "reads")
                 #find barcode and strand
                 read_name  = line.split()[0]
                 strand     = int(line.split()[1])
                 barcode    = read_name.split("BC:",1)[1]
-                read_len   = len(line.split()[9])
+                cigar      = line.split()[5]
+                cig_list   = re.findall(r'[0-9]+[MIDNSHPX=]+', cigar)
+                seq_length = int(len(line.split()[9])) #length of sequence
 
                 #add to lists of starts and barcodes 
                 if strand == 0:
-                    barcode_list_f.append([start_pos, barcode])
+                    barcode_list_f.append([left_pos, barcode])
                 else:
-                    rev_start = start_pos + read_len
+                    if cig_list[0][-1]=="S": #if there is soft-clipping at 3' end of reverse read
+                        sc_correction = int(cig_list[0][:-1]) #number of soft-clipped bases
+                        rev_start = left_pos + seq_length - sc_correction
+                    else:
+                        rev_start = left_pos + seq_length
                     barcode_list_r.append([rev_start, barcode])
 
-    unique_list_f = list(np.unique(np.array(barcode_list_f), axis=0))
-    unique_list_r = list(np.unique(np.array(barcode_list_r), axis=0))
+    unique_list_f = (np.unique(np.array(barcode_list_f), axis=0)).tolist()
+    unique_list_r = (np.unique(np.array(barcode_list_r), axis=0)).tolist()
 
     print("Total number of reads processed: ", counter)
     print("Total number of unique forward reads: ", len(unique_list_f))
@@ -466,53 +473,44 @@ def write_wig_from_dict(wig_dict, sample_name, genome):
 
 #**********************************************************************************
 
-def assign_counts_to_sites(ta_sites, template_list_fwd, template_list_rev):
+def ta_site_dict(genome_fasta):
+    fasta_seq   = open_fasta(genome_fasta)
+    ta_sites    = find_insertion_sites(fasta_seq)
+    ta_dict     = {}
+    for site in ta_sites:
+        ta_dict[site] = 0
+    return ta_dict
+
+#**********************************************************************************
+
+def assign_counts_to_sites(fasta, template_list_fwd, template_list_rev):
     """
     Function to tally ta sites with insertions
-    Input               ta_sites                ordered lists of all possible ta sites in Mbovis genome
-                        template_list_fwd       list of lists of barcode, strand, and insertion position for each unique template on fwd strand
-                        template_list_rev       list of lists of barcode, strand, and insertion position for each unique template on rev strand          
-    Output              read_count_dict         dictionary of ta sites with insertions and read counts
+    Input               fasta                   fasta file of genome
+                        template_list_fwd       list of lists of barcode and insertion position for each unique template on fwd strand
+                        template_list_rev       list of lists of barcode and insertion position for each unique template on rev strand          
+    Output              read_count_dict         dictionary of every ta sites with unique read counts
 
     """
 
-    
-    read_count_dict = {}
+    ta_site_dict = ta_site_dict(fasta)
     no_match        = []
 
-    fwd_insertions = template_list_fwd
-    insertions_list = [line[0] for line in fwd_insertions]
-    for position in insertions_list:
-        site = int(position) - 2
-        #check if ins_site is in list of ta sites 
-        if site in ta_sites:
-            if site not in read_count_dict:
-                read_count_dict[site] = 1
-            else:
-                read_count_dict[site] += 1
-        # closest_ta = take_closest(ta_sites, site)
-        # if site - closest_ta < 4:
-        #     if closest_ta not in read_count_dict:
-        #         read_count_dict[closest_ta] = 1
-        #     else:
-        #         read_count_dict[closest_ta] += 1
+    for line in template_list_fwd:
+        site = int(line[0]) -2
+        if site in ta_site_dict:
+            ta_site_dict[site] += 1
         else:
-            no_match.append(site)
+            no_match.append(line)
 
-    rev_insertions = template_list_rev
-    insertions_list = [line[0] for line in rev_insertions]
-    for position in insertions_list:
-        site = int(position))
-        closest_ta = take_closest(ta_sites, site)
-        if closest_ta - site < 4:  #if alignment includes up to 3 bases of transposon seq will be smaller number than actual ta coord
-            if closest_ta not in read_count_dict:
-                read_count_dict[closest_ta] = 1
-            else:
-                read_count_dict[closest_ta] += 1
-        #else:
-            #no_match.append(site)
+    for line in template_list_rev:
+        site = int(line[0])
+        if site in ta_site_dict:
+            ta_site_dict[site] += 1
+        else:
+            no_match.append(line)
 
-    return read_count_dict
+    return ta_site_dict, no_match
 
 #**********************************************************************************
 
