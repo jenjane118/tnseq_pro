@@ -77,54 +77,6 @@ def iterate_add_barcode(fastq_dir, output_dir):
 
 #********************************************************************************************************
 
-def read_samfile(samfile):
-    """
-    read sam_file and sort lines between header and reads
-    """
-
-    header = []
-    reads  = []
-
-    with open(samfile, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line[0] == "@":
-                header.append(line)
-            else:
-                reads.append(line)
-    return header, reads
-
-#********************************************************************************************************
-
-def parse_samflag(read):
-    """
-    Function to determine strand orientation of alignment from read header
-    """
-    samflag = read.split()[1]
-    if samflag=="16":
-        strand = "R"
-    elif samflag=="0":
-        strand = "F"
-    else:
-        strand = "*"
-    return strand
-
-#********************************************************************************************************
-
-def parse_cigar(cigar):
-    """
-    Parse cigar string from sam file
-    regex: \*|([0-9]+[MIDNSHPX=])+
-    Input               cigar               cigar string from sam file
-    Output              cig_list            list of cigar string elements
-    """
-    import re
-    #find all number/letter combos in cigar string
-    cig_list = re.findall(r'[0-9]+[MIDNSHPX=]+', cigar)
-    return cig_list
-
-#********************************************************************************************************
-
 def mmfind1(G,n,H,m,max): # lengths; assume n>m
   """
   A function to find matches of transposon sequence in read 
@@ -209,48 +161,6 @@ def open_fasta(refseq):
 
 #**********************************************************************************
 
-def filter_reads_by_strand(reads):
-    """
-    Function to filter reads by strand
-    Input               reads           list of reads
-    Output              fwd_strand_reads    list of reads mapped to forward strand
-                        rev_strand_reads    list of reads mapped to reverse strand
-    """
-    fwd_strand_reads = []
-    rev_strand_reads = []
-    for read in reads:
-        if parse_samflag(read) == "F":
-            fwd_strand_reads.append(read)
-        else:
-            rev_strand_reads.append(read)
-    return fwd_strand_reads, rev_strand_reads
-    
-#**********************************************************************************
-
-def find_ta_position(read, tag_pos):
-    """
-    Find the TA position relative to + strand
-    Input           read                        sequencing read (mapped) from sam file
-                    tag_pos                     position of tag in read (from find_tags3)
-    Output          ta_position                 predicted position of insertion site in read
-                                                (end of tag)
-
-
-    """
-    
-    strand      = parse_samflag(read)
-    left_pos    = read.split()[3]
-    if tag_pos != -1:
-        if strand == 'F':
-            ta_position = int(left_pos) #(this is a few bases off when sequence matches end of transposon tag)
-        else: #reverse strand
-            ta_position = int(left_pos) + tag_pos
-    else:
-        ta_position = "-"
-    return ta_position
-
-#**********************************************************************************
-
 def find_tags_fastq(seq, target_tag, max):
     
     """
@@ -271,31 +181,6 @@ def find_tags_fastq(seq, target_tag, max):
     return match
 
 #**********************************************************************************
-
-def take_closest(myList, myNumber):
-    """
-    Assumes myList is sorted. Returns closest value to myNumber.
-
-    If two numbers are equally close, return the smallest number.
-
-    from https://stackoverflow.com/questions/12141150/from-list-of-integers-get-number-closest-to-a-given-value/12141511#12141511
-    """
-    from bisect import bisect_left
-    pos = bisect_left(myList, myNumber)
-    if pos == 0:
-        return myList[0]
-    if pos == len(myList):
-        return myList[-1]
-    before = myList[pos - 1]
-    after = myList[pos]
-    if after - myNumber < myNumber - before:
-        return after
-    else:
-        return before
-    
-#**********************************************************************************
-
-
 
 def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2):
     """
@@ -354,26 +239,6 @@ def iterate_tag_trim(fastq_directory):
     for file in fastq_files:
         print("File being processed: ", file)
         trim_tag_fastq(file, "barcoded_reads")
-
-#**********************************************************************************
-
-def remove_dups(fwd_bc_list, rev_bc_list):
-    """
-    Function to remove duplicate barcodes from fwd and rev lists
-    Input               fwd_bc_list         list of fwd barcodes
-                        rev_bc_list         list of rev barcodes
-    Output              template_bc_list    list of unique barcodes from fwd and rev lists
-    
-    """
-    import numpy as np
-
-    fwd_bc_arr = np.unique(np.array(fwd_bc_list), axis=0)
-    rev_bc_arr = np.unique(np.array(rev_bc_list), axis=0)
-    fwd_bc_list = fwd_bc_arr.tolist()
-    rev_bc_list = rev_bc_arr.tolist()
-    #template_bc_list = fwd_bc_list + rev_bc_list
-    
-    return fwd_bc_list, rev_bc_list
 
 #**********************************************************************************
 
@@ -473,7 +338,7 @@ def write_wig_from_dict(wig_dict, sample_name, genome):
 
 #**********************************************************************************
 
-def ta_site_dict(genome_fasta):
+def make_ta_dict(genome_fasta):
     fasta_seq   = open_fasta(genome_fasta)
     ta_sites    = find_insertion_sites(fasta_seq)
     ta_dict     = {}
@@ -493,11 +358,11 @@ def assign_counts_to_sites(fasta, template_list_fwd, template_list_rev):
 
     """
 
-    ta_site_dict = ta_site_dict(fasta)
+    ta_site_dict = make_ta_dict(fasta)
     no_match        = []
 
     for line in template_list_fwd:
-        site = int(line[0]) -2
+        site = int(line[0]) -2 #ta starts at -2 from clipped end of tag
         if site in ta_site_dict:
             ta_site_dict[site] += 1
         else:
@@ -510,7 +375,10 @@ def assign_counts_to_sites(fasta, template_list_fwd, template_list_rev):
         else:
             no_match.append(line)
 
-    return ta_site_dict, no_match
+    print("number of unique reads assigned to TA sites: ", sum(ta_site_dict.values()))
+    print("number of unique reads with no ta site match: ", len(no_match))
+
+    return ta_site_dict #, no_match
 
 #**********************************************************************************
 
