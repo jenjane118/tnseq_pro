@@ -71,7 +71,7 @@ def iterate_add_barcode(fastq_dir, output_dir):
         sample_name = os.path.basename(read1_file)
         read2_file  = "fastq/" + sample_name.replace("R1", "R2")
         read2_file = read2_file.replace("trimmed_", "")
-        read2_file = read2_file.replace(".fastq", ".fastq.gz")
+        #read2_file = read2_file.replace(".fastq", ".fastq.gz")
         #add barcode to header
         new_name = add_barcode(read1_file, read2_file, output_dir)
         print(new_name)
@@ -175,7 +175,7 @@ def find_tags_fastq(seq, target_tag, max):
     """
     
     # for forward strand, search space restricted to first 20 nt of read plus length of tag
-    seq_space = seq[0:20+len(target_tag)]
+    seq_space = seq[0:22+len(target_tag)]
     #search string for transposon seq with max num mismatches
     match = mmfind1(seq_space, len(seq_space), target_tag, len(target_tag), max)
     
@@ -198,12 +198,16 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
     sample = re.sub(".fastq", "", bn_sample)
     tagged_list = []
     notag_list = []
+    counter = 0
     with open (fastq_file, 'r') as f:
     # header and sequence for R1 reads
         for index, line in enumerate(f):
             if index % 2 == 0:
                 head = line.rstrip()
-            # second line and every 4  (sequence)  
+                counter += 1
+                if counter % 5000000 == 0:
+                    print("Processed ", counter, "reads")
+            # second line and every 2  (sequence)  
             if index % 2 == 1:
                 seq = line.rstrip()
                 #find transposon tag in new sequence
@@ -216,8 +220,13 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
                 else:
                     notag_list.append(head + "\n")
                     notag_list.append(seq + "\n")
+
+    print("Total number of reads processed: ", counter)
+    print("Total number of reads with tag: ", len(tagged_list)/2)
+    print("Total number of reads without tag: ", len(notag_list)/2)
+    
     # write new file with tagged and no-tagged reads
-    new_filename = outdir + "//tag_clipped_" + sample + ".fastq"
+    new_filename = outdir + "/tag_clipped_" + sample + ".fastq"
     with open(new_filename, 'w') as outfile:
         outfile.writelines(tagged_list)
     outfile.close()
