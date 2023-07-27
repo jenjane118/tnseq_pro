@@ -407,12 +407,14 @@ def remove_dup_reads(sam_file):
                 read_name  = line.split()[0]
                 strand     = int(line.split()[1])
                 barcode    = read_name.split("BC:",1)[1]
+                read_len   = len(line.split()[9])
 
                 #add to lists of starts and barcodes 
                 if strand == 0:
                     barcode_list_f.append([start_pos, barcode])
                 else:
-                    barcode_list_r.append([start_pos, barcode])
+                    rev_start = start_pos + read_len
+                    barcode_list_r.append([rev_start, barcode])
 
     unique_list_f = list(np.unique(np.array(barcode_list_f), axis=0))
     unique_list_r = list(np.unique(np.array(barcode_list_r), axis=0))
@@ -476,26 +478,31 @@ def assign_counts_to_sites(ta_sites, template_list_fwd, template_list_rev):
 
     
     read_count_dict = {}
-    #no_match        = []
+    no_match        = []
 
     fwd_insertions = template_list_fwd
     insertions_list = [line[0] for line in fwd_insertions]
-    for site in insertions_list:
-        site = int(site)
-        #check if ins_site is in list of ta sites (or within 3 nt of ta position)
-        closest_ta = take_closest(ta_sites, site)
-        if site - closest_ta < 4:
-            if closest_ta not in read_count_dict:
-                read_count_dict[closest_ta] = 1
+    for position in insertions_list:
+        site = int(position) - 2
+        #check if ins_site is in list of ta sites 
+        if site in ta_sites:
+            if site not in read_count_dict:
+                read_count_dict[site] = 1
             else:
-                read_count_dict[closest_ta] += 1
-        #else:
-            #no_match.append(site)
+                read_count_dict[site] += 1
+        # closest_ta = take_closest(ta_sites, site)
+        # if site - closest_ta < 4:
+        #     if closest_ta not in read_count_dict:
+        #         read_count_dict[closest_ta] = 1
+        #     else:
+        #         read_count_dict[closest_ta] += 1
+        else:
+            no_match.append(site)
 
     rev_insertions = template_list_rev
     insertions_list = [line[0] for line in rev_insertions]
-    for site in insertions_list:
-        site = int(site)
+    for position in insertions_list:
+        site = int(position))
         closest_ta = take_closest(ta_sites, site)
         if closest_ta - site < 4:  #if alignment includes up to 3 bases of transposon seq will be smaller number than actual ta coord
             if closest_ta not in read_count_dict:
