@@ -141,18 +141,20 @@ def find_insertion_sites(seq):
     Only using TA positions from + strand for counting number of sites,
     as they are same site on either strand but start is off by one.
     """
-    from Bio.Seq import Seq
-    
-    seq_obj         = Seq(seq)
-    rec_seq         = str(Seq.reverse_complement(seq_obj))
+    #from Bio.Seq import Seq
+    #seq_obj         = Seq(seq)
+    #rec_seq         = str(Seq.reverse_complement(seq_obj))
+
     fwd_positions = motif_finder(seq, "TA")
-    rev_positions = motif_finder(rec_seq, "TA")
     
     return fwd_positions
 
 #**********************************************************************************
 
 def open_fasta(refseq):
+    """
+    Function to open fastq file and return sequence.
+    """
     with open(refseq, 'r') as file:
         seq = ''
         for line in file:
@@ -162,20 +164,21 @@ def open_fasta(refseq):
 
 #**********************************************************************************
 
-def find_tags_fastq(seq, target_tag, max):
+def find_tags_fastq(seq, target_tag, max, seq_max=22):
     
     """
-    Find transposon tag in sequence of each forward read. Needs to be within first 20 nt of read (start between 5-10)
+    Find transposon tag in sequence of each forward read. Needs to be within first set number of nt of read (start between 5-10)
 
       Input           read              mapped read to forward strand (+)
                       target_tag        string that matches transposon sequence
                       max               maximum number of mismatches allowed (default=2)
+                      seq_max           maximum number of nt to search for tag at start of sequence (default=22)
       Output          start             calculation of start of read/insertion point 
                                         from left-most start position of tag or -1 if no match
     """
     
     # for forward strand, search space restricted to first 22 nt of read plus length of tag (fits len of longest primer)
-    seq_space = seq[0:22+len(target_tag)]
+    seq_space = seq[0:seq_max+len(target_tag)]
     #search string for transposon seq with max num mismatches
     match = mmfind1(seq_space, len(seq_space), target_tag, len(target_tag), max)
     
@@ -193,7 +196,14 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
     """
     import os.path
     import re
-    filename = str(fastq_file)
+    import sys
+
+    #check tag has valid nucleotides
+    if check_seq(tag):
+        pass
+    else:
+        sys.exit("Invalid sequence tag")
+
     bn_sample = os.path.basename(fastq_file)
     sample = re.sub(".fastq", "", bn_sample)
     tagged_list = []
@@ -308,25 +318,6 @@ def remove_dup_reads(sam_file):
     print("Total number of duplicate reads: ", counter - len(unique_list_f) - len(unique_list_r))
 
     return unique_list_f, unique_list_r
-
-#**********************************************************************************
-
-def ta_sites_to_dict(ta_sites, read_count_dict):
-    """ 
-    Function to create wig file of insertions
-    Input               ta_sites                ordered list of all possible ta sites in Mbovis genome
-                        read_count_dict         dictionary of ta sites with insertions and read counts
-    Output              wig_dict                dict of insertions
-
-    """
-    wig_dict = {}
-    for site in ta_sites:
-        if site in read_count_dict:
-            count = read_count_dict[site]
-        else:
-            count = 0
-        wig_dict[site] = count
-    return wig_dict
 
 #**********************************************************************************
 
