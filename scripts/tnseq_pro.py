@@ -174,7 +174,7 @@ def find_tags_fastq(seq, target_tag, max):
                                         from left-most start position of tag or -1 if no match
     """
     
-    # for forward strand, search space restricted to first 20 nt of read plus length of tag
+    # for forward strand, search space restricted to first 22 nt of read plus length of tag (fits len of longest primer)
     seq_space = seq[0:22+len(target_tag)]
     #search string for transposon seq with max num mismatches
     match = mmfind1(seq_space, len(seq_space), target_tag, len(target_tag), max)
@@ -224,6 +224,7 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
     print("Total number of reads processed: ", counter)
     print("Total number of reads with tag: ", len(tagged_list)/2)
     print("Total number of reads without tag: ", len(notag_list)/2)
+    print("Percent of no-tagged reads: ", (len(notag_list)/2)/counter)
     
     # write new file with tagged and no-tagged reads
     new_filename = outdir + "/tag_clipped_" + sample + ".fastq"
@@ -425,16 +426,15 @@ def iterate_sam_to_wig(sam_dir, genome_fasta):
     import os
     import glob
     import re
-    sam_files = glob.glob("sorted_reads" + "/*.sam")
+    sam_files = glob.glob(sam_dir + "/*.sam")
     print(sam_files)
-    bovis_fasta = "ref_seqs/Mbovis_AF2122-97.fasta"
     for file in sam_files:
         #find sample name from file
         sample_filename = os.path.basename(file).split(".")[0]
         sample_name = re.findall(r'mapped_(\w*)_R1_001', sample_filename)[0]
         print(sample_name)
         print(file)
-        sam_to_wig(file, bovis_fasta, sample_name)
+        sam_to_wig(file, genome_fasta, sample_name)
 
 #**********************************************************************************
 
