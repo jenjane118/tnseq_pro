@@ -9,7 +9,7 @@ Author: Jennifer J. Stiens [j.j.stiens\@gmail.com](mailto:j.j.stiens@gmail.com){
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-i_am("Sharon_lab.Rproj")
+i_am("Tn_seq_project.Rproj")
 
 library(here)
 library(tidyverse)
