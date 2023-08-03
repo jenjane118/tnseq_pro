@@ -15,10 +15,11 @@ def add_barcode(file1, file2, outdir):
     """
     A function to extract the barcode from the associated p7 index read to the header of each read in the fastq file
 
-    Input               file1                       fastq file for sequence reads (R1 or R3)
+    Input               file1                       fastq file for sequence reads (R1 or R3) (must be unzipped)
                         file2                       fastq file for i7 index reads (R2)
                         outdir                      path to output directory
-    Output              barcoded<sample>.fastq      new fastq file which has barcode added to header   
+    Output              barcoded<sample>.reads      ".reads" file which has barcode added to header 
+                                                            -has two lines per read  (head and sequence)
 
     """
     import re
@@ -48,7 +49,7 @@ def add_barcode(file1, file2, outdir):
                 list_entry = new_head + "\n" + f1_seq + "\n"
                 seq_list.append(list_entry)
     # write new file with barcodes
-    new_filename = outdir + "/barcode_" + sample + ".fastq"
+    new_filename = outdir + "/barcode_" + sample + ".reads"
     with open(new_filename, 'w') as outfile:
         outfile.writelines(seq_list)
     outfile.close()
@@ -65,6 +66,12 @@ def iterate_add_barcode(fastq_dir, output_dir):
     """
     import os
     import glob
+
+    # Check whether the output directory exists or not
+    isExist = os.path.exists(output_dir)
+    if not isExist:
+        # Create a new directory if it does not exist
+        os.makedirs(output_dir)
     trimmed_files = glob.glob(fastq_dir + "/*_R1_001.fastq")
     print(trimmed_files)
     for read1_file in trimmed_files:
@@ -186,13 +193,13 @@ def find_tags_fastq(seq, target_tag, max, seq_max=22):
 
 #**********************************************************************************
 
-def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2):
+def trim_tag_fastq(reads_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=2):
     """
     Function to trim transposon tag from fastq reads
-    Input               fastq_file          fastq file of barcoded reads
+    Input               reads_file          .reads file of barcoded reads
                         target_tag          string of transposon tag
                         max                 maximum number of mismatches allowed
-    Output              tag_trimmed_fasta   fasta file of trimmed reads (header and sequence only)
+    Output              tag_trimmed_reads   reads file of trimmed reads (header and sequence only)
     """
     import os.path
     import re
@@ -204,12 +211,12 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
     else:
         sys.exit("Invalid sequence tag")
 
-    bn_sample = os.path.basename(fastq_file)
-    sample = re.sub(".fastq", "", bn_sample)
+    bn_sample = os.path.basename(reads_file).split(".")[0]
+    sample = re.findall(r'barcode_trimmed_(\w*)_R1_001', bn_sample)[0]
     tagged_list = []
     notag_list = []
     counter = 0
-    with open (fastq_file, 'r') as f:
+    with open (reads_file, 'r') as f:
     # header and sequence for R1 reads
         for index, line in enumerate(f):
             if index % 2 == 0:
@@ -231,17 +238,19 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
                     notag_list.append(head + "\n")
                     notag_list.append(seq + "\n")
 
-    print("Total number of reads processed: ", counter)
-    print("Total number of reads with tag: ", len(tagged_list)/2)
-    print("Total number of reads without tag: ", len(notag_list)/2)
-    print("Percent of no-tagged reads: ", (len(notag_list)/2)/counter)
+    stats_file = outdir + "/" + sample + "_process_stats.txt"
+    with open(stats_file, 'w') as stats_file:
+        print("Total number of barcoded reads processed: ", counter, file=stats_file)
+        print("Total number of reads with tag: ", int(len(tagged_list)/2), file=stats_file)
+        print("Total number of reads without tag: ", int(len(notag_list)/2), file=stats_file)
+        print("Percent of no-tagged reads: ", round((len(notag_list)/2)/counter,2), file=stats_file)
     
     # write new file with tagged and no-tagged reads
-    new_filename = outdir + "/tag_clipped_" + sample + ".fastq"
+    new_filename = outdir + "/tag_clipped_" + sample + ".reads"
     with open(new_filename, 'w') as outfile:
         outfile.writelines(tagged_list)
     outfile.close()
-    bad_filename = outdir + "/no_tag_" + sample + ".fastq"
+    bad_filename = outdir + "/no_tag_" + sample + ".reads"
     with open(bad_filename, 'w') as outfile:
         outfile.writelines(notag_list)
     
@@ -249,21 +258,30 @@ def trim_tag_fastq(fastq_file, outdir, tag="ACTTATCAGCCAACCTGTTA", mismatch_max=
 
 #**********************************************************************************
 
-def iterate_tag_trim(fastq_directory):
+def iterate_tag_trim(reads_directory, output_dir="barcoded_reads/tag_trimmed"):
     """
     Function to iterate through fastq files in directory and trim transposon tag
     Input               fastq_directory     directory of fastq files
-    Output              
+                        output_dir          path to output directory (default=barcoded_reads)
+
     """
     import glob
-    fastq_files = glob.glob(fastq_directory + "/*.fastq")
-    for file in fastq_files:
+    import os
+    path = output_dir
+    # Check whether the specified path for output directory exists or not
+    isExist = os.path.exists(path)
+    if not isExist:
+        # Create a new directory because it does not exist
+        os.makedirs(path)
+
+    reads_files = glob.glob(reads_directory + "/*.reads")
+    for file in reads_files:
         print("File being processed: ", file)
-        trim_tag_fastq(file, "barcoded_reads")
+        trim_tag_fastq(file, output_dir)
 
 #**********************************************************************************
 
-def remove_dup_reads(sam_file):
+def remove_dup_reads(sam_file, output_dir):
     """ 
     Function to remove duplicate reads
 
@@ -275,11 +293,15 @@ def remove_dup_reads(sam_file):
     """
     import numpy as np
     import re
+    import os.path
 
     counter = 0
     barcode_list_f = []
     barcode_list_r = []
 
+    sample_filename = os.path.basename(sam_file).split(".")[0]
+    sample_name = re.findall(r'mapped_(\w*)_R1_001', sample_filename)[0]
+    
     with open(sam_file, 'r') as f:
         for line in f:
             line = line.strip()
@@ -312,25 +334,33 @@ def remove_dup_reads(sam_file):
     unique_list_f = (np.unique(np.array(barcode_list_f), axis=0)).tolist()
     unique_list_r = (np.unique(np.array(barcode_list_r), axis=0)).tolist()
 
-    print("Total number of reads processed: ", counter)
-    print("Total number of unique forward reads: ", len(unique_list_f))
-    print("Total number of unique reverse reads: ", len(unique_list_r))
-    print("Total number of duplicate reads: ", counter - len(unique_list_f) - len(unique_list_r))
+    stats_file = output_dir + "/" + sample_name + "_process_stats.txt"
+    with open(stats_file, 'a') as stats_file:
+        print("Total number of mapped reads processed: ", counter, file=stats_file)
+        print("Total number of unique forward reads: ", len(unique_list_f), file=stats_file)
+        print("Total number of unique reverse reads: ", len(unique_list_r), file=stats_file)
+        print("Total number of duplicate reads: ", counter - len(unique_list_f) - len(unique_list_r), file=stats_file)
 
     return unique_list_f, unique_list_r
 
 #**********************************************************************************
 
-def write_wig_from_dict(wig_dict, sample_name, genome):
+def write_wig_from_dict(wig_dict, output_dir, sample_name, genome):
     """
     Function to write wig file from dict of insertions
     Input               wig_dict            dict of insertions
                         outfile_name        str of outfile name
     Output              outfile             wig file of insertions into output dir
     """
-   
+    import os.path
+
+    #check outfile exists, create if not
+    isExist = os.path.exists(output_dir)
+    if not isExist:
+        os.makedirs(output_dir)
+
     #write template reads
-    outfile = "output/" + sample_name + "_insertions.wig"
+    outfile = output_dir + "/" + sample_name + "_insertions.wig"
     with open(outfile, 'w') as f:
         f.write("#generated by tnseq_pro from " + sample_name + "\n")
         f.write("variableStep chrom=" + genome + "\n")
@@ -384,7 +414,7 @@ def assign_counts_to_sites(fasta, template_list_fwd, template_list_rev):
 
 #**********************************************************************************
 
-def sam_to_wig(samfile, genome_fasta, sample_name):
+def sam_to_wig(samfile, output_dir, genome_fasta, sample_name):
     """
     Wrapper function to create wig file from sam file
     Input           samfile         sam file of mapped reads   
@@ -398,7 +428,7 @@ def sam_to_wig(samfile, genome_fasta, sample_name):
     genome      = os.path.basename(genome_fasta).split(".")[0]  
     
     #remove duplicate reads
-    unique_reads = remove_dup_reads(samfile)
+    unique_reads = remove_dup_reads(samfile, output_dir)
     fwd_sites = unique_reads[0]
     rev_sites = unique_reads[1]
 
@@ -406,13 +436,13 @@ def sam_to_wig(samfile, genome_fasta, sample_name):
     res = assign_counts_to_sites(genome_fasta, fwd_sites, rev_sites)
     
     #write wig file
-    wig_file = write_wig_from_dict(res, sample_name, genome)
+    wig_file = write_wig_from_dict(res, output_dir, sample_name, genome)
     
     return wig_file
 
 #**********************************************************************************
 
-def iterate_sam_to_wig(sam_dir, genome_fasta):
+def iterate_sam_to_wig(sam_dir, output_dir, genome_fasta):
     # make list of .sam files in directory
     import os
     import glob
@@ -425,7 +455,7 @@ def iterate_sam_to_wig(sam_dir, genome_fasta):
         sample_name = re.findall(r'mapped_(\w*)_R1_001', sample_filename)[0]
         print(sample_name)
         print(file)
-        sam_to_wig(file, genome_fasta, sample_name)
+        sam_to_wig(file, output_dir, genome_fasta, sample_name)
 
 #**********************************************************************************
 
@@ -443,7 +473,7 @@ def analyze_dataset(wigfile):
     reads += cnt
     data.append((cnt,w[0]))
 
-  output = open(wigfile+".stats","w")
+  output = open(wigfile +".stats", "w")
   output.write("total TAs: %d, insertions: %d (%0.1f%%), total reads: %d\n" % (TAs,ins,100*(ins/float(TAs)),reads))
   output.write("mean read count per non-zero site: %0.1f\n" % (reads/float(ins)))
   output.write("5 highest counts:\n")

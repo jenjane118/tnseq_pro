@@ -1,0 +1,124 @@
+['sorted_reads/mapped_C1_R1_001.sam', 'sorted_reads/mapped_Mb24_R1_001.sam', 'sorted_reads/mapped_C2_R1_001.sam', 'sorted_reads/mapped_B1_R1_001.sam', 'sorted_reads/mapped_Mb09_R1_001.sam', 'sorted_reads/mapped_B2_R1_001.sam', 'sorted_reads/mapped_A2_R1_001.sam', 'sorted_reads/mapped_D2_R1_001.sam', 'sorted_reads/mapped_A1_R1_001.sam', 'sorted_reads/mapped_D1_R1_001.sam']
+C1
+sorted_reads/mapped_C1_R1_001.sam
+Total number of reads processed:  4170196
+Total number of unique forward reads:  2027715
+Total number of unique reverse reads:  2011725
+Total number of duplicate reads:  130756
+number of unique reads assigned to TA sites:  4000616
+number of unique reads with no ta site match:  38824
+Mb24
+sorted_reads/mapped_Mb24_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Processed  15000000 reads
+Processed  20000000 reads
+Total number of reads processed:  20073840
+Total number of unique forward reads:  7631531
+Total number of unique reverse reads:  7468303
+Total number of duplicate reads:  4974006
+number of unique reads assigned to TA sites:  15024799
+number of unique reads with no ta site match:  75035
+C2
+sorted_reads/mapped_C2_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Total number of reads processed:  12320144
+Total number of unique forward reads:  5861152
+Total number of unique reverse reads:  5868661
+Total number of duplicate reads:  590331
+number of unique reads assigned to TA sites:  11596280
+number of unique reads with no ta site match:  133533
+B1
+sorted_reads/mapped_B1_R1_001.sam
+Total number of reads processed:  2894890
+Total number of unique forward reads:  1282848
+Total number of unique reverse reads:  1339844
+Total number of duplicate reads:  272198
+number of unique reads assigned to TA sites:  2607862
+number of unique reads with no ta site match:  14830
+Mb09
+sorted_reads/mapped_Mb09_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Processed  15000000 reads
+Processed  20000000 reads
+Processed  25000000 reads
+Processed  30000000 reads
+Processed  35000000 reads
+Processed  40000000 reads
+Processed  45000000 reads
+Processed  50000000 reads
+Processed  55000000 reads
+Total number of reads processed:  58697940
+Total number of unique forward reads:  22033782
+Total number of unique reverse reads:  22187385
+Total number of duplicate reads:  14476773
+number of unique reads assigned to TA sites:  43948440
+number of unique reads with no ta site match:  272727
+B2
+sorted_reads/mapped_B2_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Processed  15000000 reads
+Processed  20000000 reads
+Processed  25000000 reads
+Processed  30000000 reads
+Processed  35000000 reads
+Processed  40000000 reads
+Processed  45000000 reads
+Processed  50000000 reads
+Total number of reads processed:  54511011
+Total number of unique forward reads:  25299002
+Total number of unique reverse reads:  25312899
+Total number of duplicate reads:  3899110
+number of unique reads assigned to TA sites:  50202109
+number of unique reads with no ta site match:  409792
+A2
+sorted_reads/mapped_A2_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Processed  15000000 reads
+Processed  20000000 reads
+Total number of reads processed:  23315608
+Total number of unique forward reads:  10521459
+Total number of unique reverse reads:  10726510
+Total number of duplicate reads:  2067639
+number of unique reads assigned to TA sites:  21020541
+number of unique reads with no ta site match:  227428
+D2
+sorted_reads/mapped_D2_R1_001.sam
+Total number of reads processed:  4276826
+Total number of unique forward reads:  2086224
+Total number of unique reverse reads:  2079942
+Total number of duplicate reads:  110660
+number of unique reads assigned to TA sites:  4136321
+number of unique reads with no ta site match:  29845
+A1
+sorted_reads/mapped_A1_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Processed  15000000 reads
+Processed  20000000 reads
+Processed  25000000 reads
+Processed  30000000 reads
+Processed  35000000 reads
+Processed  40000000 reads
+Processed  45000000 reads
+Processed  50000000 reads
+Processed  55000000 reads
+Processed  60000000 reads
+Total number of reads processed:  62078208
+Total number of unique forward reads:  25974596
+Total number of unique reverse reads:  26128908
+Total number of duplicate reads:  9974704
+number of unique reads assigned to TA sites:  51790112
+number of unique reads with no ta site match:  313392
+D1
+sorted_reads/mapped_D1_R1_001.sam
+Processed  5000000 reads
+Processed  10000000 reads
+Processed  15000000 reads
+Processed  20000000 reads
+
+​

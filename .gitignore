@@ -1,5 +1,6 @@
 #other programs
 scripts/tpp_tools.py
+scripts/old_functions.py
 
 # jupyter notebooks
 .ipynb_checkpoints
@@ -72,7 +73,7 @@ bam_data/
 trimmed/
 sorted_reads/
 mapped_reads/
-
+tests/
 
 
 # excel spreadsheets

@@ -1,0 +1,2 @@
+nz_mean	nz_median	skew	kurtosis
+148.2818	47	4.4649	46.495

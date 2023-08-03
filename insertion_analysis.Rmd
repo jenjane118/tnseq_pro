@@ -1,0 +1,408 @@
+---
+title: "Insertion Analysis"
+output: 
+  html_notebook: default
+date: "2023.07.28"
+author: "Jennifer Stiens"
+---
+
+## Insertion file Analysis
+
+29 July 2023
+
+Analyse insertions and distributions of samples after creation of insertion files (.wig)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+i_am("Tn_seq_project.Rproj")
+
+library(here)
+library(tidyverse)
+
+```
+
+
+Jupyter notebook for all transit work on thoth
+/d/in16/u/sj003/men_tnseq/
+
+
+```{r summary_stats}
+library(tidyverse)
+summary <- read_csv("output/sample_stats.csv", col_names=T)
+summary$menadione <- as.factor(summary$menadione)
+summary$experiment <- as.factor(summary$experiment)
+#plot number of unique reads per ta's hit
+
+ggplot(summary, aes(color=experiment)) +
+  geom_point(aes(x=tas_hit, y=template_reads))
+
+#or can use ins_density, same plot
+
+
+
+```
+
+No obvious correlation with number of unique reads and number of TA's hit
+
+## saturation curves of number of TA's hit with adding technical and biological replicates
+
+Does including the replicates increase the number of unique TA sites hit for each experiment/biological replicate? Would pooling the biological replicates increase number of unique TA sites hit?
+
+do separately for each condition. Read in summary data
+
+```{r summary_plot}
+library(dplyr)
+library(ggplot2)
+summary <- read_csv("output/sample_stats.csv", col_names=T)
+summary$menadione <- as.factor(summary$menadione)
+summary$experiment <- as.factor(summary$experiment)
+
+men_plus  <- summary %>% 
+  filter(menadione == 1) %>% 
+  select(c(sample, experiment, ta_reads, nz_mean))
+men_minus <- summary %>% 
+  filter(menadione == 0) %>% 
+  select(c(sample, experiment, ta_reads, nz_mean))
+
+men_plus %>% filter(experiment==1)
+
+ggplot(data=summary, aes(x=sample, y=ta_reads, fill=menadione)) +
+  geom_bar(stat="identity")
+
+
+```
+
+Do the number of unique TA sites hit increase with adding the replicates or by pooling the biological experiments?
+
+Get all insertion data into dataframe
+
+```{r read_wigfiles_into_dataframe}
+
+library(purrr)
+# sample name, condition, experiment, ta_site, read_count
+data_path = here('menadione_tnseq/output')
+wig_files <- dir(data_path, pattern="*.wig$")
+#wig_files = list.files(path = data_path, pattern = "wig$", full.names = TRUE)
+
+df1 <- data_frame(sample=wig_files) %>%
+  mutate(file_contents = map(wig_files,         
+           ~ read_delim(file.path(data_path, .), skip=1, delim=" "))
+        )  
+colnames(unnest(df1, cols=2))
+# rename with sample name instead of filename (have to do this for specific samples) maybe rename in directory first
+df1[[1]]<-sub("_insertions.wig", "", df1[[1]])
+
+#remove repeat tnseq samples
+men_df <- df1[1:8,]
+
+# list of nested dfs
+unnest(men_df, cols = 1)
+
+# add columns to nested df
+men_df <- men_df %>% mutate("condition" = c("men+", "men+", "men-", "men-", "men+", "men+", "men-", "men-"), "experiment" = c(rep(c("1", "2"),4)))
+
+
+# all unnested
+men_df1 <- unnest(men_df, cols=2)
+#change column names
+men_df1 <- rename(men_df1, ta_coord = variableStep, 
+       reads = `chrom=Mbovis_AF2122_97`)
+
+# get particular sample
+unnest(men_df1, cols = 2) %>%
+  filter(sample=="A1")
+
+#save as R object
+saveRDS(men_df1, here("menadione_tnseq/R_data/men_data.Rdata"))
+
+```
+Find set of unique sites hit for each dataset. plot sum of this set after adding more sites from replicates.
+
+```{r sat_curves_men_positive}
+library(dplyr)
+men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
+
+#for each sample, make set of non-zero ta sites
+nz_sites <- men_df1 %>% filter(reads != 0)
+
+nz_sites_plus <- nz_sites %>% filter(condition=="men+")
+nz_sites_minus <- nz_sites %>% filter(condition=="men-")
+
+A1 <- nz_sites_plus %>% filter(sample=="A1") %>% select(ta_coord) %>% pull()
+A2 <- nz_sites_plus %>% filter(sample=="A2") %>% select(ta_coord) %>% pull()
+C1 <- nz_sites_plus %>% filter(sample=="C1") %>% select(ta_coord) %>% pull()
+C2 <- nz_sites_plus %>% filter(sample=="C2") %>% select(ta_coord) %>% pull()
+
+#combine reps for each library incrementally
+exp1 <- union(A1, C1)
+exp2 <- union(exp1, A2)
+# all together
+plus_union <- union(exp2, C2)
+
+#number of unique ta sites with all together
+length(plus_union)
+#39304
+#insertion density (/73536)
+total_ta = 73536
+length(plus_union)/total_ta
+#0.53
+
+#make df
+pos_cumul_unique <- tibble(
+  dataset=c("A1", "C1", "A2", "C2"),
+  exp = c(1,1,2,2),
+  len_tas = c(length(A1), length(C1), length(A2), length(C2)),
+  cum_tas = c(length(A1), length(exp1), length(exp2), length(plus_union)),
+  cum_ins_den = c(length(A1)/total_ta, length(exp1)/total_ta, length(exp2)/total_ta, length(plus_union)/total_ta)
+  )
+
+
+#plot for exp 1
+data_p1 = pos_cumul_unique %>% filter(exp==1) %>% mutate(ins_den = len_tas/total_ta)
+pl_exp1 <- ggplot(data_p, aes(x=dataset, y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("experiment 1") +
+  ggtitle(c("Menadione positive, experiment 1"))
+  
+#plot exp 2
+data_p2 = pos_cumul_unique %>% filter(exp==2) %>% mutate(ins_den = len_tas/total_ta)
+pl_exp2 <- ggplot(data_p2, aes(x=dataset, y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("experiment 2") +
+  ggtitle(c("Menadione positive, experiment 2"))
+
+#plot with all reps both libraries--insertion density
+pos_cumul_unique <- pos_cumul_unique %>% mutate(ins_den = len_tas/total_ta)
+pl_pos <- ggplot(pos_cumul_unique, 
+                 aes(x=factor(dataset, levels=c("A1", "C1", "A2", "C2")),
+                     y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("") +
+  ggtitle("Menadione positive both libraries")
+
+pl_pos
+
+pl_pos_sites <- ggplot(pos_cumul_unique, 
+                 aes(x=factor(dataset, levels=c("A1", "C1", "A2", "C2")),
+                     y=len_tas)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_tas), group=1) +
+  geom_point(aes(y=cum_tas), group=1) +
+  ylab("Number of unique TA sites") +
+  xlab("") +
+  ggtitle("Menadione positive both libraries")
+
+pl_pos_sites
+
+grid.arrange(pl_exp1, pl_exp2, pl_pos, pl_pos_sites)
+
+#best replicate from each experiment (A1 and A2)
+best_data <- tibble(dataset=c("A1", "A2"),
+  len_tas = c(length(A1), length(A2)),
+  ins_den = c(length(A1)/total_ta, length(A2)/total_ta),
+  cum_tas = c(length(A1), length(union(A1, A2)) ),
+  cum_ins_den = cum_tas/total_ta
+  )
+
+pl_best_rep <- ggplot(best_data, 
+                 aes(x=factor(dataset, levels=c("A1","A2")),
+                     y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("") +
+  ggtitle("Menadione positive best reps from each experiment")
+
+pl_best_rep
+
+```
+
+
+```{r sat_curves_men_neg}
+library(dplyr)
+men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
+#for each sample, make set of non-zero ta sites
+nz_sites <- men_df1 %>% filter(reads != 0)
+nz_sites_minus <- nz_sites %>% filter(condition=="men-")
+
+#menadione minus
+B1 <- nz_sites_minus %>% filter(sample=="B1") %>% select(ta_coord) %>% pull()
+B2 <- nz_sites_minus %>% filter(sample=="B2") %>% select(ta_coord) %>% pull()
+D1 <- nz_sites_minus %>% filter(sample=="D1") %>% select(ta_coord) %>% pull()
+D2 <- nz_sites_minus %>% filter(sample=="D2") %>% select(ta_coord) %>% pull()
+
+#combine reps for each library
+exp1m <- union(B1, D1)
+exp2m <- union(exp1m, B2)
+# all together
+plus_union_m <- union(exp2m, D2)
+
+#number of unique ta sites with all together
+length(plus_union_m)
+#46597
+#insertion density (/73536)
+total_ta = 73536
+length(plus_union_m)/total_ta
+#0.63
+
+#make df
+neg_cumul_unique <- tibble(
+  dataset=c("B1", "D1", "B2", "D2"),
+  exp = c(1,1,2,2),
+  len_tas = c(length(B1), length(D1), length(B2), length(D2)),
+  cum_tas = c(length(B1), length(exp1m), length(exp2m), length(plus_union_m)),
+  cum_ins_den = c(length(B1)/total_ta, length(exp1m)/total_ta, length(exp2m)/total_ta, length(plus_union_m)/total_ta)
+  )
+
+
+#plot for exp 1
+data_m1 = neg_cumul_unique %>% filter(exp==1) %>% mutate(ins_den = len_tas/total_ta)
+pl_exp1m <- ggplot(data_m1, aes(x=dataset, y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("experiment 1") +
+  ggtitle(c("Menadione negative, experiment 1"))
+  
+#plot exp 2
+data_m2 = neg_cumul_unique %>% filter(exp==2) %>% mutate(ins_den = len_tas/total_ta)
+pl_exp2m <- ggplot(data_m2, aes(x=dataset, y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("experiment 2") +
+  ggtitle(c("Menadione negative, experiment 2"))
+
+#plot with all reps both libraries--insertion density
+neg_cumul_unique <- neg_cumul_unique %>% mutate(ins_den = len_tas/total_ta)
+pl_neg <- ggplot(neg_cumul_unique, 
+                 aes(x=factor(dataset, levels=c("B1", "D1", "B2", "D2")),
+                     y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("") +
+  ggtitle("Menadione negative both libraries")
+
+pl_neg
+
+pl_neg_sites <- ggplot(neg_cumul_unique, 
+                 aes(x=factor(dataset, levels=c("B1", "D1", "B2", "D2")),
+                     y=len_tas)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_tas), group=1) +
+  geom_point(aes(y=cum_tas), group=1) +
+  ylab("Number of unique TA sites") +
+  xlab("") +
+  ggtitle("Menadione negative both libraries")
+
+pl_neg_sites
+
+grid.arrange(pl_exp1m, pl_exp2m, pl_neg, pl_neg_sites)
+
+#best replicate from each experiment (D1 and B2)
+best_data_m <- tibble(dataset=c("D1", "B2"),
+  len_tas = c(length(D1), length(B2)),
+  ins_den = c(length(D1)/total_ta, length(B2)/total_ta),
+  cum_tas = c(length(D1), length(union(D1, B2)) ),
+  cum_ins_den = cum_tas/total_ta
+  )
+
+pl_best_rep_m <- ggplot(best_data_m, 
+                 aes(x=factor(dataset, levels=c("D1","B2")),
+                     y=ins_den)) +
+  geom_bar(stat="identity") +
+  geom_line(aes(y=cum_ins_den), group=1) +
+  geom_point(aes(y=cum_ins_den), group=1) +
+  ylab("Insertion density") +
+  xlab("") +
+  ggtitle("Menadione negative best reps from each experiment")
+
+pl_best_rep_m
+
+```
+This seems to show that we have a sampling bottleneck somewhere (esp in men positive) but should be random as each dataset has different set of insertion sites. Menadione neg has much better coverage/insertion density.
+
+Definite increase in sites when adding two libraries.
+
+
+## distribution of each dataset--both pooled with tech reps and without
+
+```{r histogram_qc}
+# histogram of nz-reads
+
+men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
+
+for (i in 1:8){
+  nxt_sample = men_df$sample[i]
+  # get particular sample
+  sample_df <- unnest(men_df1, cols = 2) %>% filter(sample==nxt_sample)
+  sample_nz <- sample_df %>% filter(reads!=0) %>% select(ta_coord, reads)
+  pl <- ggplot(sample_nz, aes(x=reads)) +
+    geom_histogram(bins=10000) +
+    xlim(1,15000) +
+    ylim(0, 2000) +
+    ggtitle(paste(nxt_sample, " distribution of non-zero reads"))
+  file <- paste("menadione_tnseq/images/", nxt_sample, "_nz_distribution.pdf", sep="")
+  ggsave(here(file), pl)
+  #qqplot(y=sample_nz$reads, x=qgeom(ppoints(length(sample_nz$reads)), prob= 1/(mean(sample_nz$reads))) )
+  }
+
+max(a1_nz$reads)
+min(a1_nz$reads)
+
+# qq plot (how well does distribution resemble geometric distribution)
+#qqnorm(y=a1_nz$reads)
+qqplot(y=a1_nz$reads, x=qgeom(ppoints(length(a1_nz$reads)), prob= 1/(mean(a1_nz$reads))), xlab = "Data Quantiles", ylab = "Theoretical Quantiles")
+
+
+# rank frequency
+# plot read counts in sorted order
+a2 <- men_df1 %>% filter(sample=="A2" & reads!=0)
+a2_sorted <- sort(a2$reads, decreasing=F)
+a2_ranks <- rank(a2_sorted, na.last=T)
+plot(a2_sorted, a2_ranks, xlab="non-zero read counts")
+
+
+#scipy.stats.probplot(truncnzreads, dist="geom", sparams=(1.0/numpy.mean(truncnzreads),))
+
+```
+What is nz_median and how does it compare to nz_mean?
+
+```{r stats}
+library(dplyr)
+library(moments)
+men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
+
+stat_df <- tibble(sample=men_df$sample, nz_mean=0, nz_median=0, sample_skew=0, sample_kurt=0)
+for (i in 1:8){
+  nxt_sample = men_df$sample[i]
+  # get particular sample
+  sample_df <- unnest(men_df1, cols = 2) %>% filter(sample==nxt_sample)
+  sample_nz <- sample_df %>% filter(reads!=0) %>% select(ta_coord, reads)
+  stat_df$nz_mean[i]     <- round(mean(sample_nz$reads),4)
+  stat_df$nz_median[i]   <- median(sample_nz$reads)
+  stat_df$sample_skew[i] <- round(skewness(sample_nz$reads),4)
+  stat_df$sample_kurt[i] <- round(kurtosis(sample_nz$reads),4)
+}
+filename <- "menadione_tnseq/output/stats.tsv"
+write_delim(stat_df, here(filename), delim="\t")
+
+stat_df
+```
+
+
+
