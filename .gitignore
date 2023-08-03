@@ -7,6 +7,7 @@ scripts/old_functions.py
 */.ipynb_checkpoints/*
 *.webarchive
 */__pycache__
+Men_tnseq_thoth.ipynb
 
 # History files
 .Rapp.history
