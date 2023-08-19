@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
+# coding=utf-8
 
-# Copyright 2023
-# Jennifer J. Stiens
-# j.j.stiens@gmail.com
-# 
-# This script is part of tnseq_pro read processing software   
-# 
 
-#usage: tnseq_pro.py
+""" Tnseq_pro read processing software """
 
+"""
+Program:    tnseq_pro
+File:       tnseq_pro.py
+Version:    1.0
+Date:       09.08.23
+Function:   This script is part of tnseq_pro read processing software   
+
+Author:     Jennifer J. Stiens
+            j.j.stiens@gmail.com
+            https://github.com/jenjane118/tnseq_pro
+
+Institution:    Birkbeck University of London
+                Project supervisors:  Dr. Irilenia Nobeli
+                                  Dr. Sharon Kendall (RVC)
+_____________________________________________________________________________
+Description:
+============
+This module contains functions to process reads for tnseq_pro pipeline
+
+Usage:
+======
+tnseq_pro         SELF
+
+
+"""
 #**********************************************************************************
 
 def add_barcode(file1, file2, outdir):

@@ -1,0 +1,12 @@
+ORF	name	desc	sites	mean_ctrl	mean_exp	log2FC	sum_ctrl	sum_exp	delta_mean	pvalue	adj_pvalue
+MB0177	mce1C	MCE-FAMILY PROTEIN MCE1C	24	96.3	2.8	-3.7	9243.3	266.89	-93.5	0	0
+MB0367c	NA	conserved protein	8	217.1	24.5	-2.91	6947	783	-192.6	1.00E-04	0.03677
+MB1217c	fadD21	probable fatty-acid-amp ligase fadd21 (fatty-acid-amp synthetase) (fatty-acid-amp synthase)	30	94.3	2.1	-3.82	11313.7	246.01	-92.2	0	0
+MB1363	glgP	PROBABLE GLYCOGEN PHOSPHORYLASE GLGP	42	63.5	210.3	1.65	10671.5	35324.22	146.7	1.00E-04	0.03677
+MB1383	irta	iron-regulated transporter irta	34	6.3	0.1	-1.15	852.5	9.23	-6.2	1.00E-04	0.03677
+MB1552	wbbL2	POSSIBLE RHAMNOSYL TRANSFERASE WBBL2	20	64.6	0.4	-3.68	5166.1	32.89	-64.2	0	0
+MB1819	PE19	pe family protein pe19	6	106.2	2.6	-3.87	2549.7	62.15	-103.6	0	0
+MB2497	glbO	globin (oxygen-binding protein) glbo	9	217.3	30.1	-2.66	7822.6	1084.78	-187.2	0	0
+MB2636c	snop	probable glutamine amidotransferase snop	3	248.3	0.3	-5.57	2979.5	4.06	-248	0	0
+MB2849c	NA	CONSERVED HYPOTHETICAL PROTEIN	4	97.9	0.3	-4.28	1567.1	4.87	-97.6	0	0
+MB3080c	NA	NADPH:quinone oxidoreductase	6	143.3	1561.5	3.4	3438.5	37475.7	1418.2	0	0

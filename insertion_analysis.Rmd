@@ -6,11 +6,6 @@ date: "2023.07.28"
 author: "Jennifer Stiens"
 ---
 
-## Insertion file Analysis
-
-29 July 2023
-
-Analyse insertions and distributions of samples after creation of insertion files (.wig)
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -26,23 +21,29 @@ Jupyter notebook for all transit work on thoth
 /d/in16/u/sj003/men_tnseq/
 
 
+## Insertion file Analysis
+
+29 July 2023
+
+Analyse insertions and distributions of samples after creation of insertion files (.wig)
+
+
 ```{r summary_stats}
 library(tidyverse)
-summary <- read_csv("output/sample_stats.csv", col_names=T)
+summary <- read_csv("output/sample_stats.csv", col_names=T, show_col_types = F)
 summary$menadione <- as.factor(summary$menadione)
 summary$experiment <- as.factor(summary$experiment)
 #plot number of unique reads per ta's hit
 
-ggplot(summary, aes(color=experiment)) +
-  geom_point(aes(x=tas_hit, y=template_reads))
-
+ggplot(summary, aes(y=tas_hit, x=template_reads, label=sample)) +
+  geom_point() + 
+  geom_text(hjust=0.5, vjust=-0.5) +
+  geom_smooth(method="lm", se=F)
+ggsave(here("menadione_tnseq/images/reads_v_taHit.png"))
 #or can use ins_density, same plot
-
-
-
 ```
 
-No obvious correlation with number of unique reads and number of TA's hit
+No obvious correlation with number of non-duplicate template reads and number of TA's hit
 
 ## saturation curves of number of TA's hit with adding technical and biological replicates
 
@@ -53,7 +54,7 @@ do separately for each condition. Read in summary data
 ```{r summary_plot}
 library(dplyr)
 library(ggplot2)
-summary <- read_csv("output/sample_stats.csv", col_names=T)
+summary <- read_csv("output/sample_stats.csv", col_names=T, show_col_types = F)
 summary$menadione <- as.factor(summary$menadione)
 summary$experiment <- as.factor(summary$experiment)
 
@@ -66,9 +67,11 @@ men_minus <- summary %>%
 
 men_plus %>% filter(experiment==1)
 
-ggplot(data=summary, aes(x=sample, y=ta_reads, fill=menadione)) +
-  geom_bar(stat="identity")
+ggplot(data=summary, aes(x=factor(sample, levels=c("A1", "C1", "B1", "D1","A2","C2","B2","D2")), y=ta_reads, fill=menadione)) +
+  geom_bar(stat="identity") +
+  xlab("dataset")
 
+ggsave(here("menadione_tnseq/images/insertion_density.png"))
 
 ```
 
@@ -81,12 +84,12 @@ Get all insertion data into dataframe
 library(purrr)
 # sample name, condition, experiment, ta_site, read_count
 data_path = here('menadione_tnseq/output')
-wig_files <- dir(data_path, pattern="*.wig$")
-#wig_files = list.files(path = data_path, pattern = "wig$", full.names = TRUE)
+#wig_files <- dir(data_path, pattern="*.wig$")
+wig_files = list.files(path = data_path, pattern = "_insertions.wig$", full.names = FALSE)
 
-df1 <- data_frame(sample=wig_files) %>%
+df1 <- tibble(sample=wig_files) %>%
   mutate(file_contents = map(wig_files,         
-           ~ read_delim(file.path(data_path, .), skip=1, delim=" "))
+           ~ read_delim(file.path(data_path, .), skip=1, delim=" ", show_col_types = F))
         )  
 colnames(unnest(df1, cols=2))
 # rename with sample name instead of filename (have to do this for specific samples) maybe rename in directory first
@@ -110,16 +113,19 @@ men_df1 <- rename(men_df1, ta_coord = variableStep,
 
 # get particular sample
 unnest(men_df1, cols = 2) %>%
-  filter(sample=="A1")
+  filter(sample=="D1")
 
 #save as R object
 saveRDS(men_df1, here("menadione_tnseq/R_data/men_data.Rdata"))
 
 ```
+
+
 Find set of unique sites hit for each dataset. plot sum of this set after adding more sites from replicates.
 
 ```{r sat_curves_men_positive}
 library(dplyr)
+library(gridExtra)
 men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
 
 #for each sample, make set of non-zero ta sites
@@ -132,6 +138,12 @@ A1 <- nz_sites_plus %>% filter(sample=="A1") %>% select(ta_coord) %>% pull()
 A2 <- nz_sites_plus %>% filter(sample=="A2") %>% select(ta_coord) %>% pull()
 C1 <- nz_sites_plus %>% filter(sample=="C1") %>% select(ta_coord) %>% pull()
 C2 <- nz_sites_plus %>% filter(sample=="C2") %>% select(ta_coord) %>% pull()
+
+#find total insertion density for each experiment
+ins_den_exp1_positive <- length(union(A1,C1)) / total_ta
+#0.50
+ins_den_exp2_positive <- length(union(A2, C2)) / total_ta
+#0.27
 
 #combine reps for each library incrementally
 exp1 <- union(A1, C1)
@@ -147,6 +159,13 @@ total_ta = 73536
 length(plus_union)/total_ta
 #0.53
 
+#number of total reads with insertions in all reps/exp (union) vs number in common in all samples (intersect)
+int_ta <- intersect(intersect(A1,C1), intersect(A2,C2))
+length(int_ta)/ length(plus_union)
+#0.25
+#25% of TAs in total hit TAs are in all 4 datasets
+
+
 #make df
 pos_cumul_unique <- tibble(
   dataset=c("A1", "C1", "A2", "C2"),
@@ -158,23 +177,34 @@ pos_cumul_unique <- tibble(
 
 
 #plot for exp 1
-data_p1 = pos_cumul_unique %>% filter(exp==1) %>% mutate(ins_den = len_tas/total_ta)
-pl_exp1 <- ggplot(data_p, aes(x=dataset, y=ins_den)) +
+data_p1 = pos_cumul_unique %>% 
+  filter(exp==1) %>% 
+  select(dataset, len_tas) %>%
+  mutate(cum_tas = c(length(A1), length(union(A1, C1))) ) %>%
+  mutate(ins_den = c(length(A1)/total_ta, length(C1)/total_ta) ) %>%
+  mutate(cum_ins_dens = c(length(A1)/total_ta, length(union(A1, C1))/total_ta))
+
+pl_exp1 <- ggplot(data_p1, aes(x=dataset, y=ins_den)) +
   geom_bar(stat="identity") +
-  geom_line(aes(y=cum_ins_den), group=1) +
-  geom_point(aes(y=cum_ins_den), group=1) +
+  geom_line(aes(y=cum_ins_dens), group=1) +
+  geom_point(aes(y=cum_ins_dens), group=1) +
   ylab("Insertion density") +
   xlab("experiment 1") +
   ggtitle(c("Menadione positive, experiment 1"))
   
 #plot exp 2
-data_p2 = pos_cumul_unique %>% filter(exp==2) %>% mutate(ins_den = len_tas/total_ta)
+data_p2 = pos_cumul_unique %>% filter(exp==2) %>% 
+  select(dataset, len_tas) %>%
+  mutate(cum_tas = c(length(A2), length(union(A2, C2))) ) %>%
+  mutate(ins_den = c(length(A2)/total_ta, length(C2)/total_ta) ) %>%
+  mutate(cum_ins_dens = c(length(A2)/total_ta, length(union(A2, C2))/total_ta))
 pl_exp2 <- ggplot(data_p2, aes(x=dataset, y=ins_den)) +
   geom_bar(stat="identity") +
-  geom_line(aes(y=cum_ins_den), group=1) +
-  geom_point(aes(y=cum_ins_den), group=1) +
-  ylab("Insertion density") +
+  geom_line(aes(y=cum_ins_dens), group=1) +
+  geom_point(aes(y=cum_ins_dens), group=1) +
+  ylab("insertion density") +
   xlab("experiment 2") +
+  ylim(0, 0.5) +
   ggtitle(c("Menadione positive, experiment 2"))
 
 #plot with all reps both libraries--insertion density
@@ -203,7 +233,8 @@ pl_pos_sites <- ggplot(pos_cumul_unique,
 
 pl_pos_sites
 
-grid.arrange(pl_exp1, pl_exp2, pl_pos, pl_pos_sites)
+pos_plots <- grid.arrange(pl_exp1, pl_exp2, pl_pos, pl_pos_sites)
+ggsave(here("menadione_tnseq/images/cumul_insertion_pos.png"), pos_plots)
 
 #best replicate from each experiment (A1 and A2)
 best_data <- tibble(dataset=c("A1", "A2"),
@@ -230,6 +261,7 @@ pl_best_rep
 
 ```{r sat_curves_men_neg}
 library(dplyr)
+library(gridExtra)
 men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
 #for each sample, make set of non-zero ta sites
 nz_sites <- men_df1 %>% filter(reads != 0)
@@ -255,6 +287,13 @@ total_ta = 73536
 length(plus_union_m)/total_ta
 #0.63
 
+#number of total reads with insertions in all reps/exp (union) vs number in common in all samples (intersect)
+int_ta_m <- intersect(intersect(B1,D1), intersect(B2, D2))
+length(int_ta_m)/ length(plus_union_m)
+#0.22
+#22% of TAs in total hit TAs are in all 4 datasets
+
+
 #make df
 neg_cumul_unique <- tibble(
   dataset=c("B1", "D1", "B2", "D2"),
@@ -266,7 +305,10 @@ neg_cumul_unique <- tibble(
 
 
 #plot for exp 1
-data_m1 = neg_cumul_unique %>% filter(exp==1) %>% mutate(ins_den = len_tas/total_ta)
+data_m1 = neg_cumul_unique %>% filter(exp==1) %>% select(dataset, len_tas) %>%
+  mutate(cum_tas = c(length(B1), length(union(B1, D1))) ) %>%
+  mutate(ins_den = c(length(B1)/total_ta, length(D1)/total_ta) ) %>%
+  mutate(cum_ins_den = c(length(B1)/total_ta, length(union(B1, D1))/total_ta))
 pl_exp1m <- ggplot(data_m1, aes(x=dataset, y=ins_den)) +
   geom_bar(stat="identity") +
   geom_line(aes(y=cum_ins_den), group=1) +
@@ -276,7 +318,11 @@ pl_exp1m <- ggplot(data_m1, aes(x=dataset, y=ins_den)) +
   ggtitle(c("Menadione negative, experiment 1"))
   
 #plot exp 2
-data_m2 = neg_cumul_unique %>% filter(exp==2) %>% mutate(ins_den = len_tas/total_ta)
+data_m2 = pos_cumul_unique %>% filter(exp==2) %>% 
+  select(dataset, len_tas) %>%
+  mutate(cum_tas = c(length(B2), length(union(B2, D2))) ) %>%
+  mutate(ins_den = c(length(B2)/total_ta, length(D2)/total_ta) ) %>%
+  mutate(cum_ins_den = c(length(B2)/total_ta, length(union(B2, D2))/total_ta))
 pl_exp2m <- ggplot(data_m2, aes(x=dataset, y=ins_den)) +
   geom_bar(stat="identity") +
   geom_line(aes(y=cum_ins_den), group=1) +
@@ -311,7 +357,8 @@ pl_neg_sites <- ggplot(neg_cumul_unique,
 
 pl_neg_sites
 
-grid.arrange(pl_exp1m, pl_exp2m, pl_neg, pl_neg_sites)
+neg_plots <- grid.arrange(pl_exp1m, pl_exp2m, pl_neg, pl_neg_sites)
+ggsave(here("menadione_tnseq/images/cumul_insertion_neg.png"), neg_plots)
 
 #best replicate from each experiment (D1 and B2)
 best_data_m <- tibble(dataset=c("D1", "B2"),
@@ -333,10 +380,77 @@ pl_best_rep_m <- ggplot(best_data_m,
 
 pl_best_rep_m
 
+# plots grouped by experiment
+grid.arrange(pl_exp1, pl_exp1m, pl_exp2, pl_exp2m)
+
 ```
 This seems to show that we have a sampling bottleneck somewhere (esp in men positive) but should be random as each dataset has different set of insertion sites. Menadione neg has much better coverage/insertion density.
 
 Definite increase in sites when adding two libraries.
+
+May want to consider summing reads at sites between replicates rather than mean as men negative exp1 has one very sparse replicate. check this in HMM--will it take mean with zeros or just non-zero counts?
+
+Barplot of insertion densities for each sample
+
+```{r insertion_density plot}
+library(dplyr)
+men_df1 <- readRDS(here("menadione_tnseq/R_data/men_data.Rdata"))
+total_ta = 73536
+#non-zero ta sites
+nz_sites <- men_df1 %>% filter(reads != 0)
+nz_sum <- nz_sites %>% group_by(sample) %>% select(ta_coord) %>% count() %>% mutate(insertion_density = n/total_ta) %>% ungroup() %>%mutate(condition = c("men+", "men+", "men-", "men-", "men+", "men+", "men-", "men-")) 
+ggplot(nz_sum, aes(x=sample, y=insertion_density, fill=condition)) +
+  geom_bar(stat="identity")
+ggsave(here("menadione_tnseq/images/insertion_density.png"))
+```
+
+
+
+### Look at difference in number of unique sites between conditions in each experiment
+
+```{r exp_differences}
+total_ta = 73536
+
+#exp 1
+#pos
+exp1p <- union(A1,C1)
+#neg
+exp1m <- union(B1, D1)
+
+#insertion densities of pooled
+exp1p_dens <- length(exp1p)/total_ta
+exp1m_dens <- length(exp1m)/total_ta
+#difference in pooled insertion densities
+exp1m_dens - exp1p_dens
+#0.021
+
+#difference in number of unique sites
+diff_exp1 <- length(exp1m) - length(exp1p)
+diff_exp1
+#1565
+
+# exp 2
+exp2p <- union(A2, C2)
+exp2m <- union(B2, D2)
+diff_exp2 <- length(exp2m) - length(exp2p)
+diff_exp2
+#18775
+
+#ratio of difference
+diff_exp2/diff_exp1
+
+#insertion densities of pooled
+exp2p_dens <- length(exp2p)/total_ta
+exp2m_dens <- length(exp2m)/total_ta
+#difference in pooled insertion densities
+exp2m_dens - exp2p_dens
+#0.25
+
+```
+
+Experiment 2 has > 10X greater difference in the number of unique insertions between the conditions than experiment 1. The difference in the pooled insertion densities is 0.02 for experiment 2, but > 10X more for experiment 2 (0.26). 26% reduction seems very high for a viable menadione concentration.
+
+Experiment 2 has more of a bottleneck in the men-positive cultures? Could this be experimental error (higher menadione concentration?) or sampling bottlenecks? Both A2 and C2 had >10M mapped reads (reads with transposon tags), indicating good amplification of the transposon junction, but very low diversity of the insertion sites (both ~20%).
 
 
 ## distribution of each dataset--both pooled with tech reps and without
@@ -352,22 +466,32 @@ for (i in 1:8){
   sample_df <- unnest(men_df1, cols = 2) %>% filter(sample==nxt_sample)
   sample_nz <- sample_df %>% filter(reads!=0) %>% select(ta_coord, reads)
   pl <- ggplot(sample_nz, aes(x=reads)) +
-    geom_histogram(bins=10000) +
-    xlim(1,15000) +
-    ylim(0, 2000) +
+    geom_histogram(bins=1000) +
+    xlim(1,2000) +
+    ylim(0, 1000) +
     ggtitle(paste(nxt_sample, " distribution of non-zero reads"))
   file <- paste("menadione_tnseq/images/", nxt_sample, "_nz_distribution.pdf", sep="")
   ggsave(here(file), pl)
   #qqplot(y=sample_nz$reads, x=qgeom(ppoints(length(sample_nz$reads)), prob= 1/(mean(sample_nz$reads))) )
   }
 
+
+
+a1_nz <- men_df1 %>% filter(sample=="A1" & reads!=0)
+ggplot(a1_nz, aes(x=reads)) +
+  geom_histogram(bins=1000) +
+    xlim(1, 2000) +
+    ylim(0, 1000) +
+    ggtitle(paste("A1 distribution of non-zero reads"))
+ggsave(here("menadione_tnseq/images/A1_histogram.png"))
 max(a1_nz$reads)
 min(a1_nz$reads)
 
 # qq plot (how well does distribution resemble geometric distribution)
 #qqnorm(y=a1_nz$reads)
-qqplot(y=a1_nz$reads, x=qgeom(ppoints(length(a1_nz$reads)), prob= 1/(mean(a1_nz$reads))), xlab = "Data Quantiles", ylab = "Theoretical Quantiles")
-
+png(here("menadione_tnseq/images/qq_plot_A1.png"))
+qq <- qqplot(y=a1_nz$reads, x=qgeom(ppoints(length(a1_nz$reads)), prob= 1/(mean(a1_nz$reads))), xlab = "Data Quantiles", ylab = "Theoretical Quantiles")
+dev.off()
 
 # rank frequency
 # plot read counts in sorted order
@@ -404,5 +528,328 @@ write_delim(stat_df, here(filename), delim="\t")
 stat_df
 ```
 
+How do the replicates and the libraries correlate? Can do this by insertions or by genes with insertions.
 
+Plot coordinates with non-zero reads against each other? NO
+Plot reads at all coordinates
+
+```{r coord_correlation}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+#read combined wig file
+wig_data <- read_delim(here("menadione_tnseq/output/combined_samples_nonorm.wig"), delim="\t", comment="#", col_names = F)
+names(wig_data) <- c("site", "A1", "C1", "A2", "C2","B1","D1","B2","D2", "gene")
+wig_data_log <- wig_data %>% 
+  mutate(across(A1:D2, ~ ifelse(.x != 0, log10(.x), 0), 
+                .names = '{paste("log", .col, sep="")}'))
+p1 <- ggplot(wig_data_log) +
+  geom_point(aes(x=logA1, y=logC1))  +
+  xlim(0,5) +
+  ylim(0,5)
+p2 <- ggplot(wig_data_log) + 
+  geom_point(aes(x=logA2, y=logC2) ) +
+  xlim(0,5) +
+  ylim(0,5)
+m1 <- ggplot(wig_data_log) + 
+  geom_point(aes(x=logB1, y=logD1)) +
+  xlim(0,5) +
+  ylim(0,5)
+m2 <- ggplot(wig_data_log) + 
+  geom_point(aes(x=logB2, y=logD2)) +
+  xlim(0,5) +
+  ylim(0,5)
+
+grid.arrange(p1, p2, m1, m2)
+
+
+#get sites and what gene they are assigned to from one of the combined wig files
+
+gene_insertions <- wig_data %>% select(c(2:10)) %>% group_by(gene) %>% summarise(across(everything(), sum))
+
+#saveRDS(gene_insertions, here("menadione_tnseq/R_data/per_gene_reads.RData"))
+
+
+range(gene_insertions$A1)
+range(gene_insertions$C1)
+nrow(gene_insertions %>% filter(A1 < 200000))
+#this filters out 2 largest read counts in A1
+p1g <- ggplot(gene_insertions) +
+  geom_point(aes(x=log10(A1), y=log10(C1))) +
+  xlim(0,6) +
+  ylim(0,6)
+
+p2g <- ggplot(gene_insertions ) +
+  geom_point(aes(x=log10(A2), y=log10(C2))) +
+  xlim(0,6) +
+  ylim(0,6)
+
+m1g <- ggplot(gene_insertions) +
+  geom_point(aes(x=log10(B1), y=log10(D1)) )+
+  xlim(0,6) +
+  ylim(0,6)
+
+m2g <- ggplot(gene_insertions) +
+  geom_point(aes(x=log10(B2), y=log10(D2))) +
+  xlim(0,6) +
+  ylim(0,6)
+
+cor_plot <- grid.arrange(p1g, p2g, m1g, m2g)
+ggsave(here("menadione_tnseq/images/cor_reps.png"), cor_plot)
+```
+
+The level of correlation seems related to the number of reads sequenced in the dataset when using raw data. Using log transformed gives better representation. 
+
+```{r genes_with_insertions}
+library(dplyr)
+gene_insertions <- readRDS(here("menadione_tnseq/R_data/per_gene_reads.RData"))
+
+#how many genes have insertions? (genes with sum of all insertions==0)
+gene_insertions <- gene_insertions %>% 
+  mutate(sum = rowSums(across(where(is.numeric))))
+
+nrow(gene_insertions %>% filter(sum!=0))
+#3923 with insertions total
+nrow(gene_insertions %>% filter(sum==0))
+#321 without insertions total
+
+#sort by condition
+pos_gene_insertions <- gene_insertions %>% 
+  select(c(gene, A1, A2, C1, C2)) %>% 
+  mutate(sum = rowSums(across(where(is.numeric))))
+nrow(pos_gene_insertions %>% filter(sum!=0))
+#3793
+nrow(pos_gene_insertions %>% filter(sum==0))
+#451
+
+neg_gene_insertions <- gene_insertions %>% 
+  select(c(gene, B1, B2, D1, D2)) %>%
+  mutate(sum = rowSums(across(where(is.numeric))))
+nrow(neg_gene_insertions %>% filter(sum!=0))
+#3867
+nrow(neg_gene_insertions %>% filter(sum==0))
+#377
+
+total_genes = nrow(gene_insertions)
+
+gene.df <- tibble(condition = c("negative", "positive"),
+                  inserted_genes = c(
+                    #nrow(gene_insertions %>% filter(sum!=0)),
+                    nrow(neg_gene_insertions %>% filter(sum!=0)),
+                    nrow(pos_gene_insertions %>% filter(sum!=0))
+                    ) 
+                  )
+
+ggplot(gene.df) +
+  geom_bar(stat="identity", aes(x=condition, y=inserted_genes)) +
+  ylim(c(0,5000)) +
+  ggtitle("Comparison of number of genes with insertions")
+
+gene_none.df <- tibble(condition = c("both", "negative", "positive"),
+                  inserted_genes = c(
+                    nrow(gene_insertions %>% filter(sum==0)),
+                    nrow(neg_gene_insertions %>% filter(sum==0)),
+                    nrow(pos_gene_insertions %>% filter(sum==0))
+                    ) 
+                  )
+ggplot(gene_none.df) +
+  geom_bar(stat="identity", aes(x=condition, y=inserted_genes)) +
+  
+  ggtitle("Comparison of number of genes with no insertions")
+
+# % of genes with insertions in each
+total_genes = nrow(gene_insertions)
+data <- tibble(condition = c("negative", "positive"), 
+               inserted_genes = c(nrow(neg_gene_insertions %>% filter(sum!=0)), 
+                                nrow(pos_gene_insertions %>% filter(sum!=0))),
+               all_genes = c(total_genes, total_genes)
+               )
+data <- data %>% mutate(percent_inserted = round(inserted_genes/total_genes,2)*100)
+
+ggplot(data, aes(x=condition, y=all_genes, fill=inserted_genes)) +
+  geom_bar(stat="identity")
+
+```
+
+
+I am more interested in correlation between TA sites hit. Change values to 0 or 1 if there is non-zero
+
+```{r ta_site_binary_correlation}
+
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+#read combined wig file
+wig_data <- read_delim(here("menadione_tnseq/output/combined_samples_nonorm.wig"), delim="\t", comment="#", col_names = F, show_col_types = FALSE)
+names(wig_data) <- c("site", "A1", "C1", "A2", "C2","B1","D1","B2","D2", "gene")
+wig_binary <- wig_data %>% mutate(across(A1:D2, ~ ifelse(.x != 0, 1, 0)) )
+
+#can't plot, just looks like four points ((0,1), (0,0), (1,0), (1,1))
+
+
+```
+
+
+
+From Chouderey et al, 2021 (September/October 2021 Volume 6 Issue 5 e00876-21 msystems.asm.org 22
+Nucleotide Biases Affecting Himar Transposon Insertion):
+
+>The correlation of insertion counts at TA sites between TnSeq data sets was calculated using a Pearson correlation coefficient. As mentioned previously, the log of insertion counts was used, since the Pearson correlation coefficient assumes that the input data are normally distributed. The two-tailed t test for the means for two independent samples was used to measure whether the expected value differs significantly between samples. Since we do not assume population variance between the two data sets is equal, the Welch t test is performed
+
+This is log10 as it better fits Gaussian distribution
+
+this can be done between libraries, as well
+
+```{r correlation between datasets}
+library(dplyr)
+
+wig_data <- read_delim(here("menadione_tnseq/output/combined_samples_nonorm.wig"), delim="\t", comment="#", col_names = F, show_col_types = FALSE)
+names(wig_data) <- c("site", "A1", "C1", "A2", "C2","B1","D1","B2","D2", "gene")
+
+#using log10 of insertion counts 
+#mutate(across(starts_with("test_"), ~ .x == get(sub("test_", "", cur_column())), 
+     #           .names = '{gsub("test_", "answer_", .col)}'))
+
+#can't use -Inf so changed to 0 if no reads (log10(1)==0 so looks like a lot more insertions with 1 count, but that's ok for distribution?)
+wig_data_log <- wig_data %>% 
+  mutate(across(A1:D2, ~ ifelse(.x != 0, log10(.x), 0), 
+                .names = '{paste("log", .col, sep="")}'))
+
+p <-  cor.test(wig_data_log$logA1, wig_data_log$logC1, method="spearman")
+p$estimate[[1]]
+#0.68
+cor.test(wig_data_log$logA2, wig_data_log$logC2, method="spearman")
+#0.89
+cor.test(wig_data_log$logB1, wig_data_log$logD1, method="spearman")
+#0.52
+cor.test(wig_data_log$logB2, wig_data_log$logD2, method="spearman")
+#0.76
+
+#test between libraries (A1 v C2, A1 v A2, A2 v C1)
+cor.test(wig_data_log$logA1, wig_data_log$logC2, method = "spearman")
+#0.36, 0.35, 0.33
+#B1vB2, B1 v D2, B2 vD1
+cor.test(wig_data_log$logB2, wig_data_log$logD1)
+#0.32, 0.30, 0.52(best between B2 and D1 which are best saturated)
+
+#two tailed t-test to see if expected value of insertions differs between replicates (did both men + and -)
+t.test(wig_data_log$logA2, wig_data_log$logC2, var.equal=F)
+#all of them support alt hypothesis (that true difference in means is not equal to 0) and therefore the populations from which the samples were taken have different means, i.e. they don't really look like they are from same overall population
+
+#did same between libraries (one rep only)
+t.test(wig_data_log$logB2, wig_data_log$logD1, var.equal=F)
+#all libraries show difference in means is more than expected if these are coming from same population which is to be expected for different libraries
+
+
+```
+Insertion counts at the same site in different libraries is expected to be uncorrelated because of so many sources of variation--indicates not influenced by insertion bias.
+
+I would expect replicates to be better correlated (and they are) because replicates do not have as much variation. If they are not correlated, seems to indicate bottleneck in downstream processing: sampling the gDNA, etc.
+
+```{r barcharts_unique insertions}
+#look at sets of TA coord between reps
+
+#for each sample, make set of non-zero ta sites
+
+A1 <- wig_data %>% filter(A1 != 0) %>% select(site) %>% pull()
+A2 <- wig_data %>% filter(A2 !=0) %>% select(site) %>% pull()
+C1 <- wig_data %>% filter(C1 !=0) %>% select(site) %>% pull()
+C2 <- wig_data %>% filter(C2 !=0) %>% select(site) %>% pull()
+B1 <- wig_data %>% filter(B1 != 0) %>% select(site) %>% pull()
+B2 <- wig_data %>% filter(B2 != 0) %>% select(site) %>% pull()
+D1 <- wig_data %>% filter(D1 != 0) %>% select(site) %>% pull()
+D2 <- wig_data %>% filter(D2 != 0) %>% select(site) %>% pull()
+
+un_ta <- tibble(A1_sites = length(A1), C1_sites=length(C1), both_exp1 = length(intersect(A1,C1)), A2_sites = length(A2), C2_sites=length(C2), both_exp2=length(intersect(A2, C2)), in_all=length(intersect(intersect(A1, A2), intersect(C1,C2))))
+d_unta <- pivot_longer(un_ta, cols= A1_sites:in_all, names_to="sample", values_to="unique_sites") %>% mutate(exp = c(rep("exp1", 3), rep("exp2", 3), "all" ) )
+d_unta$sample <- as.factor(d_unta$sample)
+
+ggplot(d_unta, aes(fill=exp)) +
+  geom_bar(stat="identity", aes(x=factor(sample, levels=c("A1_sites", "C1_sites", "both_exp1", "A2_sites", "C2_sites", "both_exp2", "in_all")), y=unique_sites)) +
+  xlab("Samples") +
+  ggtitle("Menadione Positive unique TA sites") +
+  theme(plot.title = element_text(hjust = 0.5))
+ggsave(here("menadione_tnseq/images/unique_insertions_pos.png"))
+
+#number of total reads with insertions in all reps/exp (union) vs number in common in all samples (intersect)
+int_ta <- intersect(intersect(A1,C1), intersect(A2,C2))
+union_ta <- union(union(A1,C1), union(A2,C2))
+length(int_ta)/ length(union(union(A1,C1), union(A2,C2)))
+#0.25
+#25% of TAs in total hit TAs are in all 4 datasets
+
+#plot with ratios
+data <- d_unta %>% mutate(ratio = round(unique_sites/length(union_ta),2))
+
+p1 <- ggplot(data, aes(fill=exp)) +
+  geom_bar(stat="identity", aes(x=factor(sample, levels=c("A1_sites", "C1_sites", "both_exp1", "A2_sites", "C2_sites", "both_exp2", "in_all")), y=ratio)) +
+  xlab("Samples") +
+  ylab("fraction of total unique sites") +
+  ggtitle("Menadione Positive unique TA sites") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#for control
+
+un_ta_m <- tibble(B1_sites = length(B1), D1_sites=length(D1), both_exp1 = length(intersect(B1,D1)), B2_sites = length(B2), D2_sites=length(D2), both_exp2=length(intersect(B2, D2)), in_all=length(intersect(intersect(B1, B2), intersect(D1,D2))))
+d_unta_m <- pivot_longer(un_ta_m, cols= B1_sites:in_all, names_to="sample", values_to="unique_sites") %>% mutate(exp = c(rep("exp1", 3), rep("exp2", 3), "all" ) )
+d_unta_m$sample <- as.factor(d_unta_m$sample)
+
+ggplot(d_unta_m, aes(fill=exp)) +
+  geom_bar(stat="identity", aes(x=factor(sample, levels=c("B1_sites", "D1_sites", "both_exp1", "B2_sites", "D2_sites", "both_exp2", "in_all")), y=unique_sites)) +
+  xlab("Samples") +
+  ggtitle("Menadione Negative unique TA sites") +
+  theme(plot.title = element_text(hjust = 0.5))
+ggsave(here("menadione_tnseq/images/unique_insertions_neg.png"))
+
+#plot with ratios
+
+#number of total reads with insertions in all reps/exp (union) vs number in common in all samples (intersect)
+int_ta_m <- intersect(intersect(B1,D1), intersect(B2,D2))
+union_ta_m <- union(union(B1,D1), union(B2,D2))
+length(int_ta_m)/ length(union(union(B1,D1), union(B2,D2)))
+#0.21
+#21% of TAs in total hit TAs are in all 4 datasets
+
+data <- d_unta_m %>% mutate(ratio = round(unique_sites/length(union_ta),2))
+
+p1 <- ggplot(data, aes(fill=exp)) +
+  geom_bar(stat="identity", aes(x=factor(sample, levels=c("B1_sites", "D1_sites", "both_exp1", "B2_sites", "D2_sites", "both_exp2", "in_all")), y=ratio)) +
+  xlab("Samples") +
+  ylab("fraction of total unique sites") +
+  ggtitle("Menadione Negative unique TA sites") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+Use corplot to make correlation plots like used in TRANSIT
+
+Use the mean insertion counts (averaged at the gene-level) among samples
+
+```{r corplots}
+library(corrplot)
+
+#this is messy--overlapping TA sites for more than one gene will have to be dealt with
+# wig_data <- read_delim(here("menadione_tnseq/output/combined_samples_nonorm.wig"), delim="\t", comment="#", col_names = F, show_col_types = FALSE)
+# names(wig_data) <- c("site", "A1", "C1", "A2", "C2","B1","D1","B2","D2", "gene")
+# 
+# #make mean of reads per gene
+# mean_genes <- wig_data %>% select(c(2:10)) %>% group_by(gene) %>% summarise(across(everything(), mean))
+
+#use file generated by transit export mean_genes function (same issue)
+
+gene_means <- read_tsv(here("menadione_tnseq/output/combined_gene_means.txt"), col_names = F, comment="#", show_col_types = F)
+names(gene_means) <- c("ORF", "name", "sites", "A1", "C1", "A2", "C2", "B1", "D1", "B2", "D2")	
+gm_matrix <- as.matrix(gene_means %>% select(A1:D2))
+#gm_matrix <- as.matrix(gene_means)
+png(here("menadione_tnseq/images/corrplot_samples.png"))
+corrplot(cor(gm_matrix, method="pearson"))
+dev.off()
+
+
+```
+Differences in replicates most likely due to sampling differences when scraping plates and homogenizing cells to extract DNA, taking small portion of total gDNA for sequencing, shearing, technical errors making sequencing library, PCR jackpots (eliminated after the fact), etc. 
+
+Insertion counts at the same site in different libraries is expected to be uncorrelated because of so many sources of variation—indicates transposon insertion not influenced by insertion bias.
 

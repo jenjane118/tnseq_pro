@@ -1,0 +1,868 @@
+---
+title: "Resampling Analysis"
+output: 
+  html_notebook: default
+date: "2023.08.03"
+author: "Jennifer Stiens"
+---
+
+## Resampling Analysis
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+i_am("Tn_seq_project.Rproj")
+
+library(here)
+library(tidyverse)
+
+```
+
+Ran transit HMM on combined wig for each condition
+
+```{r transit_results}
+library(dplyr)
+library(VennDiagram)
+
+pos_res <- read_delim(here('menadione_tnseq/output/transit/transit_hmm_pos_ttr_genes.txt'), col_names = F, delim="\t", show_col_types = F, comment="#")
+names(pos_res) <- c('ORF', 'gene', 'annot', 'TAs', 'ES_sites', 'GD_sites', 'NE_sites', 'GA_sites', 'saturation', 'mean', 'call')
+
+saveRDS(pos_res, here("menadione_tnseq/R_data/positive_transit_res.RData"))
+
+neg_res <- read_delim(here('menadione_tnseq/output/transit/transit_hmm_neg_ttr_genes.txt'), col_names = F, delim="\t", show_col_types = F, comment="#")
+names(neg_res) <- c('ORF', 'gene', 'annot', 'TAs', 'ES_sites', 'GD_sites', 'NE_sites', 'GA_sites', 'saturation', 'mean', 'call')
+
+saveRDS(neg_res, here("menadione_tnseq/R_data/negative_transit_res.RData"))
+
+es_pos <- pos_res %>% filter(call=="ES")
+ga_pos <- pos_res %>% filter(call== "GA")
+ne_pos <- pos_res %>% filter(call=="NE")
+gd_pos <- pos_res %>% filter(call=="GD")
+
+es_neg <- neg_res %>% filter(call=="ES")
+ga_neg <- neg_res %>% filter(call== "GA")
+ne_neg <- neg_res %>% filter(call=="NE")
+gd_neg <- neg_res %>% filter(call=="GD")
+
+length(es_pos$ORF %in% es_neg$ORF)
+#483
+length(es_neg$ORF %in% es_pos$ORF)
+#455
+
+#make venn diagram
+venn.plot <- venn.diagram(list(pos = es_pos$ORF, neg = es_neg$ORF), filename = here("menadione_tnseq/images/venn_essential.png"),
+  scaled = T)
+
+venn.plot
+```
+
+Resampling with combined wig and indicating different libraries with np sites removed.
+
+```{r results permissive}
+library(dplyr)
+res <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_perm_ttr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+res$pvalue = format(res$pvalue, scientific = F)
+res$adj_pvalue = format(res$adj_pvalue, scientific=F)
+
+write_tsv(res, here("menadione_tnseq/output/resample_results1.tsv"), col_names=T)
+
+res_rep <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_perm_ttr2.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res_rep) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+#save these as best supported results
+saveRDS(res_rep, here("menadione_tnseq/R_data/resampling_results2.RData"))
+
+write_tsv(res_rep, here("menadione_tnseq/output/resample_results2.tsv"), col_names=T)
+
+cond_es <- res %>% filter(adj_pvalue < 0.14) %>% arrange(-desc(log2FC))
+cond_es
+#3 < 0.05
+#7 < 0.06 (including narX, irta, glgP (+lfc), fadD21)
+#17 <0.10
+
+cond_rep <- res_rep %>% filter(adj_pvalue < 0.054) %>% arrange(-desc(log2FC))
+cond_rep
+#8 < 0.05 fadD21, all -LFC
+#8 < 0.104
+#includes none of the positive LFC hits
+
+
+cond_es[!(cond_es$ORF %in% cond_rep$ORF),]
+
+write_tsv(cond_rep, here("menadione_tnseq/output/cond_ess_genes_top_np.tsv"), col_names = T)
+
+#3 of the increased are statistically significant < 0.1 in rep1 only
+increased <- cond_es %>% filter(log2FC > 0)
+increased
+#glgP  and narX = 0.05779 
+
+res %>% filter(ORF=="MB3520")
+```
+MB0177 (mce1C) in TB, Rv0171 (99.8% identity in 515 aa overlap)
+
+Rv0170 and Rv0171, Rv0171 and Rv0172 are co-transcribed, by RT-PCR (See Casali et al., 2006).
+Mutant	Non-essential gene for in vitro growth of H37Rv in a MtbYM rich medium, by Himar1 transposon mutagenesis (see Minato et al. 2019). Non-essential gene for in vitro growth of H37Rv, by analysis of saturated Himar1 transposon libraries (see DeJesus et al. 2017). Non essential gene by Himar1 transposon mutagenesis in H37Rv strain (see Sassetti et al., 2003). Required for growth in C57BL/6J mouse spleen, by transposon site hybridization (TraSH) in H37Rv (See Sassetti and Rubin, 2003). Required for survival in primary murine macrophages, by transposon site hybridization (TraSH) in H37Rv (See Rengarajan et al., 2005). Non-essential gene for in vitro growth of H37Rv, by Himar1 transposon mutagenesis (See Griffin et al., 2011).
+
+Though we observed a logFC in the in-vivo experiment, this gene was not statistically significantly changed in any of the cattle. The gene before it was (mce1B)
+
+marked as NE in negative and GD in positive, previously was NE in Mtb and NE in our input Mbovis library. 
+
+positive transit results:
+
+```
+MB0175	mce1A	MCE-FAMILY PROTEIN MCE1A	39	0	0	39	0	0.3846	180.13	NE
+MB0176	mce1B	MCE-FAMILY PROTEIN MCE1B	18	0	3	15	0	0.4444	698.62	NE
+MB0177	mce1C	MCE-FAMILY PROTEIN MCE1C	25	0	25	0	0	0.5200	7.08	GD
+MB0178	mce1D	MCE-FAMILY PROTEIN MCE1D	33	0	1	32	0	0.6061	101.00	NE
+												
+```
+INsertions in non-normalised combined wig file (A1,A2,C1,C2,B1,B2,D1,D2):
+
+```
+201213	0.0	2.7	0.0	0.0	0.0	0.0	9.0	2252.4	MB0177 (mce1C)
+201230	0.0	0.0	0.0	0.0	0.0	0.0	1.0	4.8	MB0177 (mce1C)
+201247	0.0	0.0	0.0	6.9	0.0	0.0	75.9	0.0	MB0177 (mce1C)
+201250	0.0	0.0	0.0	34.6	0.0	0.0	7.0	0.0	MB0177 (mce1C)
+201296	0.0	0.0	0.0	0.0	0.0	0.0	1.0	148.2	MB0177 (mce1C)
+201407	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	MB0177 (mce1C)
+201435	0.0	0.0	0.0	0.0	0.0	0.0	0.0	310.8	MB0177 (mce1C)
+201520	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	MB0177 (mce1C)
+201529	0.0	0.0	10.1	1.0	0.0	0.0	42.2	0.0	MB0177 (mce1C)
+201628	0.0	0.0	0.0	0.0	0.0	0.0	0.4	7.2	MB0177 (mce1C)
+201663	0.0	5.4	0.0	0.0	0.0	116.4	62.9	0.0	MB0177 (mce1C)
+201710	0.0	0.0	2.1	3.0	0.0	294.8	261.8	12.0	MB0177 (mce1C)
+201713	0.0	0.0	15.5	44.5	0.0	0.2	0.0	0.0	MB0177 (mce1C)
+201773	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	MB0177 (mce1C)
+201786	0.0	0.0	0.0	0.0	0.0	0.0	328.4	0.0	MB0177 (mce1C)
+201879	1.0	0.0	0.0	6.9	0.0	398.0	14.9	0.0	MB0177 (mce1C)
+202030	0.0	0.0	1.6	0.0	0.0	0.0	0.8	0.0	MB0177 (mce1C)
+202110	2.2	5.4	0.0	0.0	0.0	0.0	1154.6	1056.9	MB0177 (mce1C)
+202113	0.0	51.6	42.7	115.7	0.0	0.0	0.0	0.0	MB0177 (mce1C)
+202153	0.0	0.0	0.0	3.0	0.0	0.0	81.5	4.8	MB0177 (mce1C)
+202276	0.0	0.0	2.7	0.0	0.0	685.4	197.8	43.0	MB0177 (mce1C)
+202329	0.0	5.4	0.0	0.0	0.0	0.0	0.0	0.0	MB0177 (mce1C)
+202430	0.0	0.0	0.5	0.0	0.0	0.2	202.7	0.0	MB0177 (mce1C)
+202641	0.0	0.0	0.0	0.0	0.0	0.0	22.1	26.3	MB0177 (mce1C)
+202659	0.0	0.0	0.0	0.0	4053.9	39.8	1.4	7.2	MB0177 (mce1C)
+```
+
+
+Interesting it is required in macrophages as menadione thought to simulate redox conditions in phagosome
+
+MB1552	wbbL2 Rv1525 in Mtb (100% identity in 261 aa overlap)
+
+Possibly involved in cell wall arabinogalactan linker formation: Uses dTDP-L-rhamnose as substrate to insert the rhamnosyl residue into the cell wall.
+
+Non-essential gene for in vitro growth of H37Rv in a MtbYM rich medium, by Himar1 transposon mutagenesis (see Minato et al. 2019). Non-essential gene for in vitro growth of H37Rv, by analysis of saturated Himar1 transposon libraries (see DeJesus et al. 2017). Essential gene for in vitro growth of H37Rv, by Himar1 transposon mutagenesis (See Griffin et al., 2011). Found to be deleted (partially or completely) in one or more clinical isolates (See Tsolaki et al., 2004).
+
+NE in negative, GD in positive
+
+MB2636c	snop	only has 3 TA sites, so hard to say if it is not a false positive.
+
+Mb1217c fadD21 Rv1185c
+
+-possibly involved in lipid degradation
+
+Non-essential gene for in vitro growth of H37Rv in a MtbYM rich medium, by Himar1 transposon mutagenesis (see Minato et al. 2019). Non-essential gene for in vitro growth of H37Rv, by analysis of saturated Himar1 transposon libraries (see DeJesus et al. 2017). Non essential gene by Himar1 transposon mutagenesis in H37Rv strain (see Sassetti et al., 2003). Required for growth in C57BL/6J mouse spleen, by transposon site hybridization (TraSH) in H37Rv (See Sassetti and Rubin, 2003).
+
+NE in negative, GD in positive.
+
+IN our in-vivo study showed only slightly + LFC (not significant)
+
+(100% identity in 578 aa overlap)
+
+_Without_ the np sites removed do we get mostly same genes. This was run twice--first time returned 11 attenuated genes and second time, 4.
+
+```{r results all}
+library(dplyr)
+res1 <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_ttr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res1) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+res2 <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_ttr2.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res2) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+cond_es1 <- res1 %>% filter(adj_pvalue < 0.054)
+cond_es1 %>% arrange(-desc(log2FC))
+#11 < 0.05
+#14 < 0.1
+
+increased1 <- res1 %>% filter(log2FC > 0 & adj_pvalue < 0.054)
+increased1
+#2 genes
+
+
+cond_es2 <- res2 %>% filter(adj_pvalue < 0.054)
+cond_es2
+#4 <0.05
+#14 < 0.10
+
+increased2 <- res2 %>% filter(log2FC > 0 & adj_pvalue < 0.1)
+increased2
+#0 in <0.05
+#3 in <0.10
+
+
+#in both
+both <- cond_es2 %>% filter(ORF %in% intersect(cond_es1$ORF, cond_es2$ORF)) %>% arrange(-desc(log2FC))
+#12  genes in common: MB0177 (mce1C), Mb1363 (glgP) and MB2849c (only 5 sites) which are in both at < 0.05
+
+# compare with np removed (12 are also called in np removed pval<0.1)
+most_promising <- both %>% filter(ORF %in% cond_es$ORF) %>% filter(sites>10) %>% arrange(-desc(log2FC))
+
+most_promising %>% filter(abs(log2FC) > 2)
+```
+
+mce1C and wbbL2 are both still on longer list with very low p-value and high log2FC. fadD21 (Mb1217c) has v high LFC and low p-value and lots of sites. surprised this doesn't show up on other results (permissive only)... It is borderline significant in that analysis
+
+MB1217c	fadD21	probable fatty-acid-amp ligase fadd21 (fatty-acid-amp synthetase) (fatty-acid-amp synthase)	30	126.7	3.4	-4.87	15206.9	403.04	-123.4	0.0001	0.05779
+
+
+MB1552 wbbL2 has borderline pvalue (0.05056) in one of the sets so this is still consistent. (Is in exp 1 alone as well)
+
+```{r}
+res1 %>% filter(ORF=="MB2497")
+```
+
+
+MB2497 glbO attenuated in both sets (oxygen-binding protein). Identical to Rv2470. Non-essential in Mtb. This has non-significant p-value (> 0.1) once non-permissive sites removed.
+
+
+Interested in MB3520 (otsA) which is highly overrepresented in the menadione positive. Orthologous to Rv3490 (99.8% identity in 500 aa overlap). 
+
+Has p-value close to 0.1 in mixed non-permissive-removed results, but improved probability in experiment 1 only (0.05779)
+
+Involved in osmoregulatory trehalose biosynthesis. Mycobacteria can produce trehalose from glucose 6-phosphate and UDP-glucose (the OtsA-OtsB pathway) from glycogen-like alpha(1-->4)-linked glucose polymers (the TreY-TreZ pathway) and from maltose (the TreS pathway) [catalytic activity: UDP-glucose + D-glucose 6-phosphate = UDP + alpha,alpha-trehalose 6-phosphate].
+
+Consider why this pathway would not be good in presence of menadione? Perhaps it increases redox stress? menadione thought to increase redox stress similar to that in phagosomes (and similar to lower pH?), so maybe production of trehalose either:
+
+  1) diverts carbohydrates from other pathways that are more favourable for redox balancing
+  
+  2) trehalose itself not useful for redox balance
+  
+  3) pathways causes increase in NAD+ or other cofactors that exacerbate menadione-caused stress (osmoregulatory pathway is going in wrong direction?)
+
+
+in non-permissive-included results:
+
+```
+MB3520
+otsA
+alpha, alpha-trehalose-phosphate synthase [udp-forming] otsa (trehalose-6-phosphate synthase) (udp-glucose-glucosephosphate glucosyltransferase) (trehalosephosphate-udp glucosyltransferase) (trehalose-6-phosphate synthetase) (trehalose-phosphate synthase) (trehalose-phosphate synthetase) (transglucosylase) (trehalosephosphate-udp glucosyl transferase)
+30
+0.0
+17.1
+4.18
+0.0
+2050.12
+17.1
+1e-04
+0.03677
+```
+
+with perm sites removed (2):
+
+```
+MB3520	otsA	alpha, alpha-trehalose-phosphate synthase [udp-forming] otsa (trehalose-6-phosphate synthase) (udp-glucose-glucosephosphate glucosyltransferase) (trehalosephosphate-udp glucosyltransferase) (trehalose-6-phosphate synthetase) (trehalose-phosphate synthase) (trehalose-phosphate synthetase) (transglucosylase) (trehalosephosphate-udp glucosyl transferase)	28	0	16.6	4.14	0	1862.54	16.6	0.0003	0.10112
+
+```
+When removing sites, reducing number of positions for possible insertions when creating null distribution. This is logical as these sites are less likely to get an insertion. However it is a crude adjustment as the likelihood is less but not eliminated so comparison of insertions in these sites between conditions could still be meaningful?
+
+from wig with all possible insertions (*means np site)
+
+```
+        A1  C1 A2 C2   B1 D1 B2 D2
+3858113	142	5	3483	2765	0	2	39	375	MB3519 (NA)
+3858198	0	0	0	0	33	260	0	0	MB3519 (NA)
+3858245	0	80	0	0	0	0	0	0	MB3519 (NA)
+3858270	145	2	0	0	0	125	358	0	MB3519 (NA)
+
+3858345	0	0	0	0	0	0	0	0	MB3520 (otsA)
+*3858484	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3858561	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3858582	2952	1	0	0	0	0	0	0	MB3520 (otsA)
+3858590	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3858593	3	2	0	0	0	0	0	0	MB3520 (otsA)
+3858629	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3858656	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3858680	1	0	0	0	0	0	0	0	MB3520 (otsA)
+3858750	29	0	0	0	0	0	0	0	MB3520 (otsA)
+3858758	107	0	0	0	0	0	0	0	MB3520 (otsA)
+3858774	3	0	0	0	0	0	0	0	MB3520 (otsA)
+3858846	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3858856	1904	0	1	0	0	0	0	0	MB3520 (otsA)
+3858894	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859044	408	332	0	0	0	0	0	0	MB3520 (otsA)
+3859063	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859190	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859209	117	0	0	0	0	0	0	0	MB3520 (otsA)
+*3859285	0	3	0	0	0	0	0	0	MB3520 (otsA)
+3859313	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859357	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859367	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859389	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859397	0	4	0	0	0	0	0	0	MB3520 (otsA)
+3859429	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859473	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859505	0	0	0	0	0	0	0	0	MB3520 (otsA)
+3859586	27	0	0	0	0	0	0	0	MB3520 (otsA)
+3859629	0	0	0	0	0	0	0	0	MB3520 (otsA)
+*3859772	0	0	0	0	1	0	0	0	MB3520 (otsA)
+
+3859891	0	6	0	0	0	0	0	0	
+```
+
+Looks like a lot more insertions in experiment 1 positive than negative. basically no insertions in negative despite quite a few sites. May see difference here if just use exp1 with site-restricted?
+
+Also, does this pop up in TRANSIT-HMM as an essential gene? Called ES by HMM in negative but NE in positive. 
+
+In the in-vivo experiment, we found ES in our Mbovis input library.
+To summarise:  
+
+1) MB3520 mutants are underrepresented in control condition (NE call) indicating disrupted gene causes decreased survival in normal conditions
+
+2) MB3520 mutants are normally represented in menadione positive condition (NE call) indicating disruption in this gene doesn't decrease survival in menadione.
+
+3) Comparing the log-fold change between insertions between the conditions, MB3520 shows an increase in representation at a borderline significant level. This indicates the disruption of the gene may actually improve survival in menadione as more disrupted clones survive than non-disrupted?
+
+4) The gene is a alpha-trehalose-phosphate synthase
+
+## Experiment 1 with site-restricted resampling (no need to remove non-permissive sites)
+
+```{r exp1_results_sr}
+library(dplyr)
+res_exp1 <- read_tsv(here("menadione_tnseq/output/resampling/resamp_exp1_ttr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res_exp1) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+cond_es_e1 <- res_exp1 %>% filter(adj_pvalue < 0.10)
+cond_es_e1 %>% arrange(-desc(log2FC))
+#10 genes at 0.1
+#3 at 0.05
+write_tsv(res_exp1, here("menadione_tnseq/output/results_exp1_sr.tsv"), col_names=T)
+
+increased <- res_exp1 %>% filter(log2FC > 0 & adj_pvalue < 0.1)
+increased
+#2 genes at 0.05 cutoff
+#7 genes at 0.1 cutoff
+
+res_exp1 %>% filter(ORF=="MB1765c")
+```
+This doesn't give more significant genes--only 3 < 0.05
+
+for example, MB3520 has 0.05779 pvalue cutoff in site-restricted in exp1 alone. NarX not even in < 0.10
+
+Running exp2 alone gets none of the same genes (but many more different ones) than exp1 alone.
+
+Another overrepresented gene in non-permissive-removed results:
+
+MB1765c narX Probable nitrate-reductase linked to persistence in host
+catalytic activity: nitrite + acceptor = nitrate + reduced acceptor
+99.7% identity in 652 aa overlap with Rv1736. This was slightly overrepresented in the in-vivo study.
+
+This is borderline (0.05056) in one set of results, but inside threshold in another. Not significant in experiment 1 alone (with site restriction)
+
+NE in both positive and negative conditions
+
+
+Other borderline cases:
+
+MB1548 fadD25 overrepresented/'amplified' (only in experiment 1)
+NE in both neg and positive LFC = +2.56 and pvalue=0. NE in both conditions
+
+MB1383 irta Rv1348 iron-regulated transporter, pval=0.08, lfc = -7.6 but very low counts (very few mutants with insertions in either condition). GD in negative, ES in positive. ES in all Mtb studies, so maybe not interesting for menadione explicitly but for bovis v tb?
+
+MB1363 glgP Rv1328 (99.7% identity in 863 aa overlap), LFC= +1.7, pval=0.058 glycogen phosphorylase, NE in both conditions
+
+MB3767c Rv3741c (100% identity) possible oxidoreductase LFC= -3.79, pval = 0.09 with only 7 sites (could lead to less significance). GA in Mtb in DeJesus but NE in other Mtb studies. NE in both conditions in Mbovis
+
+This increase in the overrepresented genes seems likely to be caused by reduction in insertion density when using only experiment 1, esp in negative condition which goes from ~63% in all together to 52% in experiment 1 along
+
+
+
+## pooling all libraries as replicates
+
+How does 'pooled' replicate resampling compare? where all datasets used as reps of single library
+
+```{r all_reps_pooled_sr}
+library(dplyr)
+
+res_all_reps <- read_tsv(here("menadione_tnseq/output/resampling/resamp_pooled_sr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res_all_reps) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+cond_all_reps <- res_all_reps %>% filter(adj_pvalue < 0.05 & sites >5)
+cond_all_reps %>% arrange(-desc(log2FC))
+#19 genes < 0.05
+
+increased <- res_exp1 %>% filter(log2FC > 0 & adj_pvalue < 0.05)
+increased
+#2 fadD25 and lspA
+
+```
+This also doesn't include some of the interesting genes like narX (Mb1756c) and otsA (Mb3520). 
+
+This doesn't seem sound.
+
+## evaluate non-permissive sites
+
+Description of site-restricted says that original resampling method is 'too conservative' because of some sites being non-permissive. Leaving in non-permissive sites gives us more significant hits than taking out. Given it is 'too conservative' and we can't use new method with library-specific permutation, it seems reasonable to use older method with either more generous p-value cutoff, and/or leave non-permissive sites in the analysis.
+
+How many 'non-permissive' sites have insertions?
+
+```{r np_insertions}
+
+library(dplyr)
+library(stringr)
+
+total_ta = 73536
+np_sites = 6605
+#percent np sites in genome
+round(np_sites/total_ta,2) * 100
+#9%
+
+#read list of non-permissive sites
+np_sites <- scan(here("menadione_tnseq/data/bovis_np_sites.txt"), what="", sep="\n")
+# get insertion data
+wig_data <- read_delim(here("menadione_tnseq/output/combined_samples_nonorm.wig"), delim="\t", comment="#", col_names = F, show_col_types = F)
+names(wig_data) <- c("site", "A1", "C1", "A2", "C2","B1","D1","B2","D2", "gene")
+
+np_rows <- wig_data %>% 
+  filter(site %in% np_sites) 
+colnms=c("A1", "C1", "A2", "C2","B1","D1","B2","D2")
+np_rows$read_sums <-rowSums(np_rows[,colnms])
+non_perm_site_reads <- np_rows %>% filter(read_sums > 10)
+#1293 have >0
+nrow(np_rows %>% filter(read_sums > 1))
+#941
+nrow(np_rows %>% filter(read_sums > 1000))
+#249
+
+write_csv(non_perm_site_reads, here("menadione_tnseq/output/np_site_reads.csv"), col_names=T)
+
+genes_to_check <- non_perm_site_reads %>% filter(is.na(gene)==F) %>% select(gene) %>% distinct(gene) %>% pull()
+length(genes_to_check)
+
+#change to ORF only
+genes_to_check <- word(genes_to_check, 1)
+```
+1293 non-permissive sites have insertions. There are significant numbers of insertions in negative condition only, for example in genes Mb0012 (275) and Mb0036 (2964).
+
+For these two genes, the fact that there are no insertions in positive and many insertions in negative may be missed in the resampling and may represent a real change. But how many of these were significant when sites weren't removed? Check to see if any of the 678 that have >10 insertions in np sites change pvalue significance in two sets of results.
+
+```{r compare_pvals_np_insertions}
+
+library(dplyr)
+removed <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_perm_ttr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(removed) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+non_removed <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_ttr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(non_removed) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+non_removed %>% filter(ORF %in% genes_to_check & adj_pvalue < 0.1)
+#Mb1363 0.087
+
+
+
+removed %>% filter(ORF=="MB3520")
+#0.101
+non_removed %>% filter(ORF=="MB3520")
+#0.037
+```
+NOne of the genes in the non-permissive with insertions list had a p-value of < 0.05 and only one had one of less than 0.10 in the non-removed results. The removal of these sites isn't impacting reaching the p-value threshold for these genes. In fact, for MB1363 (the only one with less than 0.1 pvalue in non-removed), the p-value increases with removing the non-permissive sites. Presumably because the sites removed had actual reads in them in both conditions (the delta mean is slightly higher in the np-removed results).
+
+why do some genes (MB3520 for example) have lower p-values in non-removed set than in removed set? Is this due to normalisation where read counts inflated in lower density samples when you have more zero TA-sites?  Must be normalisation thing.
+
+Create user-friendly spreadsheet that incorporates entire set with: 
+  - Mtb ortholog
+  - Transit results for each condition
+  - Functional category for gene (will be for ortholog)
+  
+```{r make_results_spreadsheet_new_params}
+library(dplyr)
+library(readxl)
+
+results <- readRDS(here("menadione_tnseq/R_data/resamp_perm_new_params.RData"))
+
+#transit results
+pos_res <- readRDS(here("menadione_tnseq/R_data/positive_transit_res.RData"))
+t_pos <- pos_res %>% select(ORF, call)
+neg_res <- readRDS(here("menadione_tnseq/R_data/negative_transit_res.RData"))
+t_neg <- neg_res %>% select(ORF, call)
+#read in old spreadsheet from in-vivo for orthologs and func categories 
+#only for protein-coding genes (with 'MB' orf designation--no tRNAs)
+vivo_res <- read_csv(here("Output/data_sorted_SLK_all_genes.csv"), col_names = F, skip=2) %>% select(c(1,2,6))
+names(vivo_res) <- c("ORF", "Mtb_ortholog", "functional_category")
+
+results_ss <- results %>% filter(grepl("MB", ORF))
+#3998
+
+results_ss <- left_join(results_ss, vivo_res, by="ORF") %>% relocate(c(Mtb_ortholog, functional_category), .after=ORF) 
+
+# add in transit results
+results_ss <- left_join(results_ss, t_pos, by="ORF") %>% relocate(call, .after=name) %>% rename(call, "positive_call"=call)
+
+results_ss <- left_join(results_ss, t_neg, by="ORF") %>% relocate(call, .after=name) %>% rename(call, "negative_call"=call)
+
+#saveRDS(results_ss, here("menadione_tnseq/R_data/new_params_resamp_ss.RData"))
+
+#save spreadsheet 
+write_csv(results_ss, here("menadione_tnseq/Output/new_params_resamp_ss.csv"), col_names = T)
+
+```
+
+Evaluate Mann-Whitney U-test for determining statistical significance of log2 fold changes
+
+```{r mann_whitney_utest}
+
+utest <- read_tsv(here("menadione_tnseq/output/utest_all_perm_ttr.tsv"), col_names = F, show_col_types = F, comment="#")
+names(utest) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "u-stat", "pvalue", "adj_pvalue")
+
+#saveRDS(utest, here("menadione_tnseq/R_data/MWutest_all_perm.RData"))
+
+signif <- utest %>% filter(adj_pvalue < 0.05 & abs(log2FC) > 3 ) %>% arrange(-desc(log2FC))
+#12
+write_tsv(signif, here("menadione_tnseq/output/utest_sig_hits.tsv"))
+
+utest %>% filter(ORF=="MB0177")
+
+```
+
+Volcano plots for resampling and for utest methods
+
+use -log10 of adjusted pvalues for volcanos, for histograms use uncorrected pvalues
+
+
+```{r volcano plots}
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+#log2FC vs -log10(adj-pvalue)
+
+#for resampling data
+results <- readRDS(here("menadione_tnseq/R_data/resampling_results2.RData"))
+#add significant column and change 0 pvalue to something plottable
+results_volcano <- results %>% mutate(signif = ifelse(adj_pvalue < 0.05, "signif", "non-sig")) %>% mutate(sig_label = ifelse(signif=="signif", ORF, ""))
+
+results_volcano$adj_pvalue[results_volcano$adj_pvalue==0] <- 0.00001
+results_volcano$pvalue[results_volcano$pvalue==0] <- 0.00001
+ggplot(results_volcano, aes(x=log2FC, y=-log10(adj_pvalue), col=signif, label=sig_label)) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  geom_vline(xintercept=c(-3.0, 3.0), col="red") +
+  scale_color_manual(values=c("black", "blue")) +
+  #geom_text(size=2, nudge_y=-.15, nudgy_x=-0.5)
+  geom_text_repel(size=3) +
+  ggtitle("Resampling, default params") +
+  theme(plot.title = element_text(hjust=0.5))
+#ggsave(here("menadione_tnseq/images/resamp_volcano.png"))
+#eliminate pvalues=1
+hist_results_volcano <- results_volcano %>% filter(pvalue !=1)
+ggplot(hist_results_volcano) +
+  geom_histogram(aes(x=pvalue), bins=400) +
+  ylim(0, 60)
+#ggsave(here("menadione_tnseq/images/resampling_pval_hist.png"))
+
+# for mann-whitney utest
+utest <- readRDS(here("menadione_tnseq/R_data/MWutest_all_perm.RData"))
+utest_volcano <- utest %>% mutate(signif = ifelse(adj_pvalue < 0.05, "signif", "non-sig")) %>% mutate(sig_label = ifelse(signif=="signif" & abs(log2FC)>3, ORF, ""))
+
+ggplot(utest_volcano, 
+                   aes(x=log2FC, y=-log10(adj_pvalue),
+                       col=signif, label=sig_label)) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  geom_vline(xintercept=c(-3, 3), col="red") +
+  scale_color_manual(values=c("black", "blue")) +
+  #geom_text(nudge_x = -0.75, nudge_y =.1 , size=2)
+  geom_text_repel(size=2) +
+  ggtitle("Mann-Whitney Utest") +
+  theme(plot.title = element_text(hjust=0.5))
+
+#ggsave(here("menadione_tnseq/images/utest_volcano.png"))
+
+#histogram of pvalues (not adjusted)
+#filter out pvalues of 1 as it means no reads detected
+hist_utest <- utest %>% filter(pvalue !=1)
+ggplot(hist_utest) +
+  geom_histogram(aes(x=pvalue), bins=100)
+#ggsave(here("menadione_tnseq/images/utest_pval_hist.png"))
+```
+Histogram of resampling is a bit sparse--BH correction assumes a continuous distribution, could increase number of permutations to get different pvalues
+
+Why the peak in middle of distribution for utest?
+
+REsampling with -winz and PC=5 parameters
+
+```{r resampling_new_params}
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+
+new_param_data <- read_tsv(here("menadione_tnseq/output/resamp_all_perm_winz_pc5.tsv"), col_names = F, comment = "#", show_col_types = F)
+names(new_param_data) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+#write_tsv(new_param_data %>% filter(adj_pvalue<0.05), here("menadione_tnseq/output/new_param_resampling_hits.tsv")) 
+#11 genes including one that is over-represented: MB3080c, NADPH:quinone oxidoreductase
+
+saveRDS(new_param_data, here("menadione_tnseq/R_data/resamp_perm_new_params.RData"))
+
+#volcano plot for new data (using lfc cutoff of 2 since increased pseudocounts)
+new_param_volcano <- new_param_data %>% mutate(signif = ifelse(adj_pvalue < 0.05, "signif", "non-sig")) %>% mutate(sig_label = ifelse(signif=="signif", ORF, ""))
+new_param_volcano$adj_pvalue[new_param_volcano$adj_pvalue==0] <- 0.00001
+new_param_volcano$pvalue[new_param_volcano$pvalue==0] <- 0.00001
+ggplot(new_param_volcano, 
+                   aes(x=log2FC, y=-log10(adj_pvalue),
+                       col=signif, label=sig_label)) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  geom_vline(xintercept=c(-2, 2), col="red") +
+  scale_color_manual(values=c("black", "blue")) +
+  #geom_text(nudge_x = -0.75, nudge_y =.1 , size=2)
+  geom_text_repel(size=2) +
+  ggtitle("Resampling, PS=5, -winz") +
+  theme(plot.title = element_text(hjust=0.5)) 
+
+#ggsave(here("menadione_tnseq/images/resamp_new_params_volcano.png"))
+
+#plot histogram of p-values
+#pvalues of 1 are assigned when no reads in any condition so filter out
+hist_new_param_vol <- new_param_volcano %>% filter(pvalue !=1)
+ggplot(hist_new_param_vol) +
+  geom_histogram(aes(x=pvalue), bins=200)
+#ggsave(here("menadione_tnseq/images/new_param_pval_hist.png"))
+```
+When you do resampling--get different significant genes every time (because of random shuffling), and even different number of significant genes. But when you do Mann Whitney, get same results each time.
+
+Should the histogram of the pvalues also show a geometric distribution? 
+
+[pvalue histogram](http://varianceexplained.org/statistics/interpreting-pvalue-histogram/)
+
+>The taller the peak, the more p-values are close to 0 and therefore significant. Similarly, the “depth” of the histogram on the right side shows how many of your p-values are null.
+
+## Gene set enrichment analysis
+
+installed r-gsea, fgsea, gsea_base in conda env but none seem useful. Installed clusterProfiler which also performs gsea and KEGG pathway analysis. had to update GO.db in env
+
+INstead of creating new files for sanger functional categories, COG and GO terms, used orthologs to substitute Mbovis orfs for Tb orfs.
+
+```{r create associations files for gsea}
+library(dplyr)
+orthologs <- read_csv(here("menadione_tnseq/GSEA_files/mb_mtb_orthologs.txt"), comment="#", col_names = F, show_col_types = F)
+names(orthologs) <- c("bovis", "tb", "identical")
+
+assoc <- read_delim(here("menadione_tnseq/GSEA_files/H37Rv_sanger_roles.dat"), col_names = F, show_col_types = F, delim="\t")
+names(assoc) <- c("tb", "grouping")
+#how many unique genes
+nrow(assoc %>% distinct(tb))
+#3924 distinct tb genes in file
+
+#will lose genes that don't have an ortholog in the list
+#3813 genes in ortholog list
+Mbovis_assoc <- inner_join(assoc, orthologs, by="tb", multiple="all") %>% 
+  relocate(bovis, .before=grouping) %>%
+  dplyr::select(bovis, grouping)
+
+#change 'Mb' to 'MB' to match resampling results
+Mbovis_assoc$bovis <- sub('Mb', 'MB', Mbovis_assoc$bovis)
+
+#write new sanger file for bovis
+write_tsv(Mbovis_assoc, here("menadione_tnseq/GSEA_files/Mbovis_sanger_roles.dat"), col_names = F)
+
+cog_assoc <- read_delim(here("menadione_tnseq/GSEA_files/H37Rv_COG_roles.dat"), col_names = F, show_col_types = F, delim="\t", comment="#", col_select=c(1:2))
+names(cog_assoc) <- c("tb", "grouping")
+#2954
+#how many unique genes
+nrow(cog_assoc %>% distinct(tb))
+#2871
+Mbovis_cog_assoc <- inner_join(cog_assoc, orthologs, by="tb", multiple="all") %>% 
+  relocate(bovis, .before=grouping) %>%
+  dplyr::select(bovis, grouping)
+#2778 associations
+
+#change 'Mb' to 'MB' to match resampling results
+Mbovis_cog_assoc$bovis <- sub('Mb', 'MB', Mbovis_cog_assoc$bovis)
+
+#write new cog file for bovis
+write_tsv(Mbovis_cog_assoc, here("menadione_tnseq/GSEA_files/Mbovis_cog_roles.dat"), col_names = F)
+
+#go terms
+go_assoc <- read_delim(here("menadione_tnseq/GSEA_files/H37Rv_GO_terms.txt"), col_names = F, show_col_types = F, delim="\t", comment="#")
+names(go_assoc) <- c("tb", "go_term")
+nrow(go_assoc)
+
+Mb_go_assoc <- inner_join(go_assoc, orthologs, by="tb", multiple="all") %>% 
+  relocate(bovis, .before=go_term) %>%
+  dplyr::select(bovis, go_term)
+nrow(Mb_go_assoc)
+
+#change 'Mb' to 'MB' to match resampling results
+Mb_go_assoc$bovis <- sub('Mb', 'MB', Mb_go_assoc$bovis)
+
+#write new cog file for bovis
+write_tsv(Mb_go_assoc, here("menadione_tnseq/GSEA_files/Mbovis_GO_terms.dat"), col_names = F)
+
+```
+
+We may be losing some by using only orthologous genes.
+
+```{r gsea analysis prep}
+
+#these packages didn't work for prokaryotes and destroyed conda env
+#library(RGSEA)
+#library(GSEABase)
+#library(fgsea)
+
+library(clusterProfiler)
+library(dplyr)
+
+#make ranked list of genes by LFC
+#read resampling data (new param data)
+
+resamp_data <- readRDS(here("menadione_tnseq/R_data/resamp_perm_new_params.RData"))
+#geneList should be a decreasing sorted vector...
+#do separately for + and = lfc no
+#genes_df_neg <- resamp_data %>% filter(log2FC<0)
+#genes_vector_neg <- genes_df_neg$log2FC
+#have to assign orfs as names for vector
+#names(genes_vector_neg) <- genes_df_neg$ORF
+#sort vector
+#ranked_genes_neg <- sort(genes_vector_neg, decreasing=T)
+#genes_df_pos <- resamp_data %>% filter(log2FC >=0)
+#genes_vector_pos <- genes_df_pos$log2FC
+#names(genes_vector_pos) <- genes_df_pos$ORF
+#ranked_genes_pos <- sort(genes_vector_pos, decreasing=T)
+genes_lfc_vec <-resamp_data$log2FC
+names(genes_lfc_vec) <- resamp_data$ORF
+ranked_genes_lfc <- sort(genes_lfc_vec, decreasing=TRUE)
+#saveRDS(ranked_genes_lfc, here("menadione_tnseq/R_data/ranked_genes_lfc.RData"))
+#sorted by signed-log-p-value, SLPV=sign(LFC)*(log(pval))
+#first have to change zero pvalues to avoid Inf numbers
+
+resamp_data$adj_pvalue[resamp_data$adj_pvalue==0] <- 0.000001
+resamp_data$pvalue[resamp_data$pvalue==0] <- 0.000001
+
+genes_slpv <- resamp_data %>% mutate(slpv = log2FC*(log(pvalue)))
+genes_slpv_vec <- genes_slpv$slpv
+names(genes_slpv_vec) <- genes_slpv$ORF
+ranked_genes_slpv <- sort(genes_slpv_vec, decreasing = TRUE)
+#saveRDS(ranked_genes_slpv, here("menadione_tnseq/R_data/ranked_genes_slpv.RData"))
+
+term_gene <- read_tsv(here("menadione_tnseq/GSEA_files/Mbovis_GO_terms.dat"), col_names = F, show_col_types = F)
+names(term_gene) <- c("gene", "term")
+#switch order
+term_gene <- term_gene %>% relocate(term, .before=gene)
+
+term_name <- read_tsv(here("menadione_tnseq/GSEA_files/GO_term_names.dat"),
+                      col_names = F, show_col_types = F)
+names(term_name) <- c("term", "name")
+gsea_res <- GSEA(geneList = ranked_genes_lfc, TERM2GENE = term_gene, TERM2NAME = term_name)
+#no term enriched under specific pvalueCutoff (0.05) for neg log2FC values (lots of ties)
+
+#list of GO terms that were enriched
+#gsea_res$ID
+#gsea_res$Description
+
+gsea_slpv <- GSEA(geneList = ranked_genes_slpv, TERM2GENE = term_gene, TERM2NAME = term_name)
+#no term enriched under specific pvalueCutoff...
+
+```
+None enriched using ranking of log fold change
+
+Installed KEGG-REST and enrichment browser packages for R
+
+[instructions for downloading KEGG mappings](https://www.researchgate.net/post/How_i_can_get_a_list_of_KEGG_pathways_and_its_list_of_genes)
+
+None of this worked. I used REST API directly from kegg website:
+
+[KEGG API](https://www.genome.jp/kegg/rest/keggapi.html)
+
+```{r kegg_enrichment}
+#library(KEGGREST)
+#library(EnrichmentBrowser)
+library(clusterProfiler)
+
+ranked_genes_slpv = readRDS(here("menadione_tnseq/R_data/ranked_genes_slpv.RData"))
+ranked_genes_lfc = readRDS(here("menadione_tnseq/R_data/ranked_genes_lfc.RData"))
+
+#clusterProfiler
+#kegg_res <- gseKEGG(ranked_genes_neg, "mbo")
+# can't get KEGG data for mbovis despite it being in the catalog, Mtb genomes don't work either (mtu or mtv)
+#download_KEGG("mbo")
+#'species' should be one of organisms listed in 'http://www.genome.jp/kegg/catalog/org_list.html'...
+#but it is there
+
+#KEGGREST
+#listDatabases()
+#none of this works for as explained
+#test <- keggList("pathway", "mbo")
+#mbovis_pathway <- downloadPathways("mbo")
+#step 4: retrieve gene sets for an organism from databases such as GO and KEGG:
+#mbo <- getGenesets(org = "mbo", db = "kegg", cache = TRUE, return.type="list")
+#step5: Parse and write the gene sets to a flat text file in GMT format for other pathway enrichment analysis programs (e.g., GSEA):
+#writeGMT(mbo, gmt.file = "20210106_kegg_sar_gmt")
+
+#Downloaded with REST-API
+
+#need to get files in correct format
+
+keg_term_names <- read_tsv(here("menadione_tnseq/GSEA_files/kegg_pathways_mbovis.txt"), comment="#", col_names = F, show_col_types = F)
+names(keg_term_names) <- c("term", "name")
+#get rid of appended genome name at end of description
+keg_term_names$name <- str_split_i(keg_term_names$name, " - ", 1)
+#write_tsv(keg_term_names, here("menadione_tnseq/GSEA_files/kegg_term_names.dat"), col_names = F)
+
+keg_gene_terms <- read_tsv(here("menadione_tnseq/GSEA_files/kegg_mappings_mbovis.txt"), comment='#', col_names = F, show_col_types = F)
+names(keg_gene_terms) <- c("gene", "term")
+#str_split_i returns only single piece from string--negative selects from end
+keg_gene_terms$gene <- str_split_i(keg_gene_terms$gene, "_", -1)
+keg_gene_terms$term <- str_split_i(keg_gene_terms$term, ":", -1)
+#write_tsv(keg_gene_terms, here("menadione_tnseq/GSEA_files/keg_gene_terms.dat"), col_names = F)
+
+#switch order
+keg_gene_terms <- keg_gene_terms %>% relocate(gene, .after=term)
+
+gsea_kegg <- GSEA(geneList = ranked_genes_slpv, TERM2GENE = keg_gene_terms, TERM2NAME = keg_term_names)
+#kegg id of pathway
+gsea_kegg$id
+#description of pathway
+gsea_kegg$Description
+#gives genes assoc with enrichment of pathway
+gsea_kegg$core_enrichment
+```
+
+Only enriched term was for  'aminoacyl biosynthesis' and this was for tRNA genes.
+
+
+Add in kegg pathway and GO terms to dataframe
+
+```{r add_annotations_to_results}
+library(dplyr)
+
+new_ss <- readRDS( here("menadione_tnseq/R_data/new_params_resamp_ss.RData"))
+
+new_ss <- left_join(new_ss, keg_gene_terms, by=c("ORF"="gene"))
+new_ss <- left_join(new_ss, keg_term_names, by="term")
+
+colnames(new_ss)[colnames(new_ss) == "term"] <- "kegg_term"
+colnames(new_ss)[colnames(new_ss) == "name.y"] <- "KEGG_path"
+colnames(new_ss)[colnames(new_ss) == "name.x"] <- "name"
+new_ss <- new_ss %>% relocate(c(kegg_term, KEGG_path), .after=functional_category)
+
+#nest the kegg terms and descriptions
+test <- new_ss %>% group_by(ORF,Mtb_ortholog,functional_category,name, negative_call, positive_call, desc, sites, mean_ctrl, mean_exp, log2FC, sum_ctrl, sum_exp, delta_mean, pvalue, adj_pvalue) %>% nest(.key="KEGG_path")
+
+go_ss <- left_join(test, term_gene, by=c("ORF"="gene"))
+go_ss <- left_join(go_ss, term_name, by="term")
+colnames(go_ss)[colnames(go_ss) == "term"] <- "GO_term"
+colnames(go_ss)[colnames(go_ss) == "name.y"] <- "GO_desc"
+colnames(go_ss)[colnames(go_ss) == "name.x"] <- "name"
+ann_df <- go_ss %>% group_by(ORF,Mtb_ortholog,functional_category,name, negative_call, positive_call, desc, sites, mean_ctrl, mean_exp, log2FC, sum_ctrl, sum_exp, delta_mean, pvalue, adj_pvalue, KEGG_path) %>% nest(.key="GO_terms")
+
+#how to view nested data
+ann_df %>% filter(ORF=="MB0009") %>% select(GO_terms) %>% unnest( GO_terms)
+
+saveRDS(ann_df, here("menadione_tnseq/R_data/new_params_resamp_annot.RData"))
+
+
+
+```
+

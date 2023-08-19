@@ -1,0 +1,8 @@
+name: transit
+channels:
+dependencies:
+   - requests
+   - bokeh>=0.10.0
+   - pip
+   - pip:
+     - git+https://github.com/mad-lab/transit.git 

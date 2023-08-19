@@ -97,6 +97,7 @@ logs/
 benchmarks/
 
 #misc directories
-docs/
+#docs/
+ngs_docs/
 data/
 images/
