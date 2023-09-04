@@ -557,9 +557,8 @@ ggplot(results_volcano, aes(x=log2FC, y=-log10(adj_pvalue), col=signif, label=si
 #eliminate pvalues=1
 hist_results_volcano <- results_volcano %>% filter(pvalue !=1)
 ggplot(hist_results_volcano) +
-  geom_histogram(aes(x=pvalue), bins=400) +
-  ylim(0, 60)
-#ggsave(here("menadione_tnseq/images/resampling_pval_hist.png"))
+  geom_histogram(aes(x=pvalue), bins=200)
+ggsave(here("menadione_tnseq/images/resampling_pval_hist.png"),width=9, height=7)
 
 # for mann-whitney utest
 utest <- readRDS(here("menadione_tnseq/R_data/MWutest_all_perm.RData"))
@@ -583,8 +582,8 @@ ggplot(utest_volcano,
 #filter out pvalues of 1 as it means no reads detected
 hist_utest <- utest %>% filter(pvalue !=1)
 ggplot(hist_utest) +
-  geom_histogram(aes(x=pvalue), bins=100)
-#ggsave(here("menadione_tnseq/images/utest_pval_hist.png"))
+  geom_histogram(aes(x=pvalue), bins=200)
+ggsave(here("menadione_tnseq/images/utest_pval_hist.png"),width=9, height=7)
 ```
 Histogram of resampling is a bit sparse--BH correction assumes a continuous distribution, could increase number of permutations to get different pvalues
 
@@ -597,7 +596,7 @@ library(dplyr)
 library(ggplot2)
 library(ggrepel)
 
-new_param_data <- read_tsv(here("menadione_tnseq/output/resamp_all_perm_winz_pc5.tsv"), col_names = F, comment = "#", show_col_types = F)
+new_param_data <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_perm_winz_pc5.tsv"), col_names = F, comment = "#", show_col_types = F)
 names(new_param_data) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
 
 #write_tsv(new_param_data %>% filter(adj_pvalue<0.05), here("menadione_tnseq/output/new_param_resampling_hits.tsv")) 
@@ -628,7 +627,7 @@ ggplot(new_param_volcano,
 hist_new_param_vol <- new_param_volcano %>% filter(pvalue !=1)
 ggplot(hist_new_param_vol) +
   geom_histogram(aes(x=pvalue), bins=200)
-#ggsave(here("menadione_tnseq/images/new_param_pval_hist.png"))
+ggsave(here("menadione_tnseq/images/new_param_pval_hist.png"), width=9, height=7)
 ```
 When you do resampling--get different significant genes every time (because of random shuffling), and even different number of significant genes. But when you do Mann Whitney, get same results each time.
 
@@ -858,11 +857,146 @@ colnames(go_ss)[colnames(go_ss) == "name.x"] <- "name"
 ann_df <- go_ss %>% group_by(ORF,Mtb_ortholog,functional_category,name, negative_call, positive_call, desc, sites, mean_ctrl, mean_exp, log2FC, sum_ctrl, sum_exp, delta_mean, pvalue, adj_pvalue, KEGG_path) %>% nest(.key="GO_terms")
 
 #how to view nested data
-ann_df %>% filter(ORF=="MB0009") %>% select(GO_terms) %>% unnest( GO_terms)
+ann_df %>% filter(ORF=="MB0009") %>% select(KEGG_path, GO_terms) %>%unnest(KEGG_path)
 
-saveRDS(ann_df, here("menadione_tnseq/R_data/new_params_resamp_annot.RData"))
+#saveRDS(ann_df, here("menadione_tnseq/R_data/new_params_resamp_annot.RData"))
 
 
 
 ```
+
+
+22 August, 2023
+
+Consider the distribution of total number of TA sites vs p-values. are p-values lower among genes with fewer TA sites?
+
+How many genes have fewer than 10 TA sites? Fewer than 5? What is mean number of TA sites
+
+```{r sites_pvalues}
+
+library(dplyr)
+library(ggrepel)
+resamp_data <- readRDS(here("menadione_tnseq/R_data/resamp_perm_new_params.RData"))
+
+#make boxplot with quartiles
+
+summary(resamp_data$sites) # range, quartiles, & mean
+resamp_data[resamp_data$sites==0,]
+#27 genes have 0 TA sites
+
+quantile(resamp_data$sites,0.1) # first decile (p=0.1)
+quantile(resamp_data$sites,c(0.05,0.95)) # 90% range
+#rank from lowest number of sites to highest
+abs_rank <- rank(resamp_data$sites)
+rel_rank <- rank(resamp_data$sites)/length(resamp_data$sites) # relative rank
+rank_df <- tibble(orf=resamp_data$ORF, sites=resamp_data$sites, p_value=resamp_data$pvalue, adj_pvalue=resamp_data$adj_pvalue, abs_rank, rel_rank)
+rank_df$adj_pvalue[rank_df$adj_pvalue==0] <- 0.00001
+rank_df$p_value[rank_df$p_value==0] <- 0.00001
+
+# proportion less than 10
+sum(resamp_data$sites <10 )/length(resamp_data$sites)
+#42% have fewer than 10 sites
+#15% have fewer than 5 sites
+
+ggplot(rank_df) +
+  stat_boxplot(aes(y=sites)) 
+
+
+#how are p-value and number of sites correlated?
+new_param_volcano <- resamp_data %>% mutate(signif = ifelse(adj_pvalue < 0.05, "signif", "non-sig")) %>% mutate(sig_label = ifelse(signif=="signif", ORF, ""))
+new_param_volcano$adj_pvalue[new_param_volcano$adj_pvalue==0] <- 0.00001
+new_param_volcano$pvalue[new_param_volcano$pvalue==0] <- 0.00001
+ggplot(new_param_volcano, 
+                   aes(x=sites, y=-log10(pvalue),
+                       col=signif, label=sig_label)) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  scale_color_manual(values=c("black", "blue")) +
+  #geom_text(nudge_x = -0.75, nudge_y =.1 , size=2)
+  geom_text_repel(size=2) +
+  ggtitle("Resampling, PS=5, -winz") +
+  theme(plot.title = element_text(hjust=0.5)) 
+ggsave(here("menadione_tnseq/images/gene_TA_sites_vs_pvalue.png"))
+
+
+#plot site rankings vs pvalue
+ggplot(rank_df, aes(x=abs_rank, y=-log10(adj_pvalue))) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  geom_hline(yintercept=c(1.3), col="red") +
+  ggtitle("Resampling, PS=5, -winz, ranked by number of TA sites") +
+  theme(plot.title = element_text(hjust=0.5)) 
+ggsave(here("menadione_tnseq/images/rankedTA_pvalue.png"))
+
+```
+Analyse resampling results eliminating sites within 5% of ends of genes (parameter with resampling)
+
+```{r resamplint_TA_clipping}
+library(dplyr)
+library(ggrepel)
+
+#with 5% clipped at both ends
+res_clipped <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_perm_winz_pc5_i5.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res_clipped) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+signif <- res_clipped %>% filter(adj_pvalue < 0.05) %>% arrange(-desc(log2FC))
+
+summary(res_clipped$sites)
+sum(res_clipped$sites <10 )/length(res_clipped$sites)
+#47% below 10 TA sites
+
+#plot pvalue vs sites
+clipped_volcano <- res_clipped %>% mutate(signif = ifelse(adj_pvalue < 0.05, "signif", "non-sig")) %>% mutate(sig_label = ifelse(signif=="signif", ORF, ""))
+clipped_volcano$adj_pvalue[clipped_volcano$adj_pvalue==0] <- 0.00001
+clipped_volcano$pvalue[clipped_volcano$pvalue==0] <- 0.00001
+ggplot(clipped_volcano, 
+                   aes(x=sites, y=-log10(pvalue),
+                       col=signif, label=sig_label)) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  scale_color_manual(values=c("black", "blue")) +
+  #geom_text(nudge_x = -0.75, nudge_y =.1 , size=2)
+  geom_text_repel(size=2) +
+  ggtitle("Resampling, PS=5, -winz -5% C/N") +
+  theme(plot.title = element_text(hjust=0.5)) 
+
+res_clipped %>% filter(ORF=="MB0411")
+
+#5% clipped at C-term only
+#with 5% clipped at both ends
+res_clipped_c <- read_tsv(here("menadione_tnseq/output/resampling/resamp_all_perm_winz_pc5_iC5.tsv"), col_names = F, show_col_types = F, comment="#")
+names(res_clipped_c) <- c("ORF", "name", "desc", "sites", "mean_ctrl", "mean_exp", "log2FC", "sum_ctrl", "sum_exp", "delta_mean", "pvalue", "adj_pvalue")
+
+signif <- res_clipped_c %>% filter(adj_pvalue < 0.05) %>% arrange(-desc(log2FC))
+
+summary(res_clipped_c$sites)
+#median=11
+sum(res_clipped_c$sites <10 )/length(res_clipped_c$sites)
+#44.6% below 10 TA sites
+res_clipped_c %>% filter(ORF=="MB0411")
+
+
+
+#plot pvalue vs sites
+clipped_volcano <- res_clipped_c %>% mutate(signif = ifelse(adj_pvalue < 0.05, "signif", "non-sig")) %>% mutate(sig_label = ifelse(signif=="signif", ORF, ""))
+clipped_volcano$adj_pvalue[clipped_volcano$adj_pvalue==0] <- 0.00001
+clipped_volcano$pvalue[clipped_volcano$pvalue==0] <- 0.00001
+ggplot(clipped_volcano, 
+                   aes(x=sites, y=-log10(pvalue),
+                       col=signif, label=sig_label)) +
+  geom_point(alpha=0.5) +
+  theme_minimal() +
+  scale_color_manual(values=c("black", "blue")) +
+  #geom_text(nudge_x = -0.75, nudge_y =.1 , size=2)
+  geom_text_repel(size=2) +
+  ggtitle("Resampling, PS=5, -winz -5% C") +
+  theme(plot.title = element_text(hjust=0.5)) 
+```
+Get 18 significant hits vs 11 without clipping. However, only 6 in common with original 11 with new parameters. Some of these hits came up before excluding non-permissive sites. fadD30 is the longest gene, with 78 sites. This is the longest gene of all past analyses. Median/mean is actually shorter--10 vs nearly 14 before clipping. Is there a good rationale for clipping?
+
+Carey et al, 2018 uses for comparing strains (clips 5% of each end)
+
+With C-term clipped only, get 10 signif hits with 7 in common with original 11.
+Seems sort of random. Larger gene (fadD30) now not significant (adj pvalue=0.05393 with 81 sites).
+
 

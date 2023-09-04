@@ -146,7 +146,6 @@ def iterate_remove_np_sites(wig_dir, outdir, fasta, np_motif='SGNTANCS'):
     import glob
     #find all np sites in fastq
     no_sites = find_np_sites(np_motif, 3, fasta)
-    print("Number of non-permissive sites: " + str(len(no_sites)))
     wigfiles = glob.glob(wig_dir + "/*_insertions.wig")
     for wig in wigfiles:
         new_file = remove_np_sites(wig, no_sites, outdir)
