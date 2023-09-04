@@ -1,9 +1,0 @@
-ORF	name	desc	sites	mean_ctrl	mean_exp	log2FC	sum_ctrl	sum_exp	delta_mean	pvalue	adj_pvalue
-MB2636c	snop	probable glutamine amidotransferase snop	3	315.9	0.3	-7.89	3791.1	4.06	-315.6	0	0
-MB2849c	NA	CONSERVED HYPOTHETICAL PROTEIN	4	110.1	0.5	-6.17	1761.3	8.75	-109.5	0	0
-MB1552	wbbL2	POSSIBLE RHAMNOSYL TRANSFERASE WBBL2	20	66.8	0.8	-5.27	5346.3	60.39	-66.1	0	0
-MB2771	NA	PROBABLE DEHYDROGENASE	8	53.6	0.6	-5.1	1716	18.91	-53	1e-4	0.05056
-MB1217c	fadD21	probable fatty-acid-amp ligase fadd21 (fatty-acid-amp synthetase) (fatty-acid-amp synthase)	30	126.7	3.4	-4.87	15206.9	403.04	-123.4	0	0
-MB0177	mce1C	MCE-FAMILY PROTEIN MCE1C	24	113.5	3.4	-4.71	10899.1	325.35	-110.1	0	0
-MB2497	glbO	globin (oxygen-binding protein) glbo	9	222.2	32.8	-2.72	8000.7	1180.85	-189.4	1e-4	0.05056
-MB3496	NA	13E12 repeat family protein	14	192.9	54.5	-1.81	10801.1	3050.61	-138.4	1e-4	0.05056

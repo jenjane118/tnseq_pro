@@ -1,8 +1,0 @@
-total TAs: 73536, insertions: 14864 (20.2%), total reads: 21020541
-mean read count per non-zero site: 1414.2
-5 highest counts:
-coord=2856426, count=44234
-coord=277185, count=40111
-coord=2967714, count=38599
-coord=1201642, count=37784
-coord=2967311, count=34695
