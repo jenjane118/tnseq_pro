@@ -1,0 +1,8 @@
+Building DAG of jobs...
+MissingInputException in rule bwa_map_single in line 21 of /Users/jenniferstiens/snakemake/tnseq/mapping/snakefile.smk:
+Missing input files for rule bwa_map_single:
+    output: mapped_reads/test_5000_R1.bam
+    wildcards: sample=test_5000_R1
+    affected files:
+        barcoded_reads/tag_trimmed/tag_clipped_test_5000_R1.reads
+        /Users/jenniferstiens/tn_seq/menadione_tn_seq/ref_seqs/Mbovis_AF2122-97.fasta

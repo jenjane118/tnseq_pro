@@ -1,0 +1,6 @@
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 1228 sequences (126425 bp)...
+[M::mem_process_seqs] Processed 1228 reads in 0.059 CPU sec, 0.019 real sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa mem -t 4 ref_seqs/Mbovis_AF2122-97.fasta barcoded_reads/tag_trimmed/tag_clipped_test_5000_R1_001.reads
+[main] Real time: 0.059 sec; CPU: 0.077 sec

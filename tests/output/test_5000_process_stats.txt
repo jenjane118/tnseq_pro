@@ -1,0 +1,8 @@
+Total number of barcoded reads processed:  1246
+Total number of reads with tag:  1228
+Total number of reads without tag:  18
+Percent of no-tagged reads:  0.01
+Total number of mapped reads processed:  1167
+Total number of unique forward reads:  565
+Total number of unique reverse reads:  592
+Total number of duplicate reads:  10
