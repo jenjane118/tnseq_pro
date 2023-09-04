@@ -1,6 +1,3 @@
-#other programs
-scripts/tpp_tools.py
-scripts/old_functions.py
 
 # jupyter notebooks
 .ipynb_checkpoints
@@ -57,47 +54,17 @@ vignettes/*.pdf
 *.DS_Store
 
 # directories and file formats that contain large data files
-*.bed
-*.bam
-*.bam.bai
-*.sam
-fastp/
-fastqc/
-fastq_data/
-bam_data/
-*.wig
-*.json
-*.html
-*.xml
-*.fastq
-*.fasta
-trimmed/
-sorted_reads/
-mapped_reads/
-tests/
 
 
 # excel spreadsheets
 *.xls
 *.xlsx
 
-#export PATH="/usr/local/opt/python/libexec/bin:$PATH"
 # images
 *.png
 *.jpg
 Images/
-#export PATH="/usr/local/opt/python/libexec/bin:$PATH"
 
 #html rendering of markdown notebooks
 *.nb.html
 
-#snakemake 
-.snakemake
-logs/
-benchmarks/
-
-#misc directories
-#docs/
-ngs_docs/
-data/
-images/
